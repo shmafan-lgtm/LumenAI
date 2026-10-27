@@ -160,8 +160,20 @@ def _truncate(s: str, n: int) -> str:
 
 def tool_fs_ls(args: dict) -> dict:
     full, _ = _safe_path(args.get("path", "."))
+    # 模型经常拿**文件路径**来调 fs_ls（"ls 一下 xxx/buggy.py"）。
+    # fs_ls 只能列目录，给它文件路径必然报「目录不存在」，
+    # 模型就会换个说法再试，一轮下来全在原地打转。这里直接列它的父目录。
+    if os.path.isfile(full):
+        full = os.path.dirname(full)
     if not os.path.isdir(full):
-        return {"error": f"目录不存在：{full}"}
+        root = os.path.abspath(_ws_root())
+        try:
+            avail = sorted(os.listdir(root))[:30]
+        except OSError:
+            avail = []
+        return {"error": f"目录不存在：{full}",
+                "hint": f"工作区根是 {root}，path 请填相对于它的路径；"
+                        f"根目录下有：{('、'.join(avail)) or '（空）'}"}
     items = []
     try:
         for name in sorted(os.listdir(full))[:200]:
@@ -487,13 +499,27 @@ def _infer_call_from_reasoning(reasoning: str) -> list[dict]:
             raw_path = path_after(seg)
             p = rel_path(raw_path)
             if nm == "fs_ls":
-                calls.append({"name": "fs_ls", "args": {"path": p or "."}})
+                # 路径指向文件时列它的父目录（fs_ls 只能列目录）
+                target = p or "."
+                try:
+                    full_t = os.path.join(_ws_root(), target.replace("/", os.sep))
+                    if os.path.isfile(full_t):
+                        target = os.path.dirname(target.replace("/", os.sep)) or "."
+                except OSError:
+                    pass
+                calls.append({"name": "fs_ls", "args": {"path": target}})
             elif nm == "fs_read":
                 target = p
                 if target and os.path.isfile(os.path.join(_ws_root(), target.replace("/", os.sep))):
                     pass
                 elif raw_path:
                     target = find_by_name(raw_path)   # 按文件名在工作区里找
+                else:
+                    # 这一段里没带自己的路径（模型只说了「Use fs_read」，
+                    # 路径在上一句提过），就按它提到的文件名全局找
+                    fm = _THINK_FILE_RE.search(seg) or _THINK_FILE_RE.search(text)
+                    if fm:
+                        target = find_by_name(fm.group(1))
                 if target:
                     calls.append({"name": "fs_read", "args": {"path": target}})
                 else:
@@ -895,8 +921,17 @@ class Runner:
             except Exception as e:
                 config.log("error.log", f"pre-search: {e}")
 
+        t_start = time.time()
+        # 单轮任务的墙钟上限。20B 权重在 8GB 显卡上每步要 1~3 分钟，
+        # 6 步能拖到 18 分钟 —— 用户等不起，卡住了也要给个交代。
+        wall_limit = float(ag.get("wall_limit_secs", 420) or 420)
+
         while step <= max_steps:
             step += 1
+            if time.time() - t_start > wall_limit:
+                self.emit({"type": "status",
+                           "text": "已超过单次任务时限，先把目前的结果交给你"})
+                break
             if self.stop_flag.is_set():
                 break
             filt = TagFilter()
