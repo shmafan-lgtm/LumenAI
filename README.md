@@ -58,6 +58,24 @@ python -m PyInstaller --noconfirm --clean --distpath dist --workpath build build
 
 打 `v*` 标签会自动跑 CI：Windows 桌面端 + 手机 APK 一起构建并挂到 Releases。
 
+### 发布到 GitHub（一条命令）
+
+```bat
+push_to_github.bat
+```
+
+脚本会引导你填仓库地址，并自动完成：测 SSH → 设远端 → 推代码 → 打 tag 触发 CI。
+
+前提是在浏览器里做两件事：
+
+1. 建一个**空仓库**（<https://github.com/new>），名字填 `Lumen`，
+   **不要**勾选 Add a README / .gitignore / license（本地已经有了）；
+2. 把部署公钥加到账号（<https://github.com/settings/ssh/new>），脚本里会打印那一整行。
+
+> 这台机器上 `github.com` 主站直连不通，所以 SSH 走 **over 443**
+> （`~/.ssh/config` 里把 github.com 指向 `ssh.github.com:443`，已配好）。
+> 下载 Release 附件走的是 `objects.githubusercontent.com`，这个域名直连是通的。
+
 ### 自己打安装器
 
 安装器是纯 tkinter（标准库），但**要用带 tkinter 的 Python**打包：
