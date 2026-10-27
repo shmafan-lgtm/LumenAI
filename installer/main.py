@@ -30,7 +30,7 @@ APP_NAME = "Lumen"
 VERSION = "1.0.0"
 
 # GitHub 仓库（Release 资产来源）
-GITHUB_REPO = os.environ.get("LUMEN_GITHUB_REPO", "").strip()
+GITHUB_REPO = os.environ.get("LUMEN_GITHUB_REPO", "shmafan-lgtm/Lumen").strip()
 GITHUB_API = "https://api.github.com/repos/{repo}/releases/latest"
 
 # 模型档位：安装器可下载的权重（走 hf-mirror 直链）

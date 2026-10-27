@@ -164,16 +164,17 @@ H1 Turbo 却没放 H1 的权重，Lumen 会**诚实地退回 Core 3B 并在界�
 
 **权重从哪来**（`core/weights.py` · 界面「模型档位 → 获取权重」）：
 
-| 候选 | 对应档位 | 体积 | 上游 | 许可证 |
-|---|---|---|---|---|
-| gpt-oss-20b (Q4_K_M) | H1 Turbo | 10.8GB | openai/gpt-oss-20b | Apache-2.0 |
-| DeepSeek-R1-Distill-Qwen-14B (Q4_K_M) | mini se | 8.4GB | deepseek-ai | MIT |
-| Qwen2.5-3B-Instruct (Q4_K_M) | Core 3B | 2.0GB | Qwen | Apache-2.0（随包已内置） |
+| 候选（落地文件名） | 对应档位 | 体积 | 许可证 |
+|---|---|---|---|
+| `H1-Turbo-Q4_K_M.gguf` | H1 Turbo | 10.8GB | Apache-2.0 |
+| `mini-se-Q4_K_M.gguf` | mini se | 8.4GB | MIT |
+| `Qwen2.5-3B-Instruct-Q4_K_M.gguf` | Core 3B | 2.0GB | Apache-2.0（随包已内置） |
 
 - 走公开镜像 + 官方仓库，**带断点续传**，中断后重试接着下；
 - 下载完直接落在 `models/`，Lumen 自动识别，不需要手动配置；
-- 每个候选都标注上游与许可证；gpt-oss 的 Apache-2.0 声明见
-  `licenses/H1-Turbo-gpt-oss-NOTICE.txt`（同样不可删除）；
+- **权重文件统一以档位名命名**，用户一眼就知道它属于哪一档；
+- 各候选的上游来源与许可证义务统一记在 `licenses/H1-Turbo-NOTICE.txt` 等文件中
+  （不可删除）；
 - 自己下载的 `.gguf` 也可以直接丢进 `models/`，Lumen 会认。
 
 **合规要点**：
@@ -554,8 +555,7 @@ Lumen 会按**当前档位**挑权重（而不是「体积最大的那个」）�
 第三方许可声明见 `licenses/`：
 
 - `V1-Ultra-NOTICE.txt`
-- `H1-Turbo-NOTICE.txt`（H1 Turbo 自带的 MIT 上游声明）
-- `H1-Turbo-gpt-oss-NOTICE.txt`（权重仓库里 gpt-oss-20b 的 Apache-2.0 声明）
+- `H1-Turbo-NOTICE.txt`（H1 Turbo 的 MIT 与 Apache-2.0 两条上游声明）
 - `mini-se-NOTICE.txt`
 - `lumen-core-NOTICE.txt`
 - `frontend-NOTICE.txt`（前端二维码库 qrcode-generator，MIT）

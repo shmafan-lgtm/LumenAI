@@ -141,7 +141,7 @@ function md(src, keepCite) {
 function tierById(id) { return S.tiers.find((t) => t.id === id) || S.tiers[0] || {}; }
 
 /* 界面上一律显示档位名，不显示权重的原始文件名。
-   例如 gpt-oss-20b-Q4_K_M.gguf → Lumen H1 Turbo。
+   例如 H1-Turbo-Q4_K_M.gguf → Lumen H1 Turbo。
    用户自己放进 models/ 的权重保留原名（那是用户自己的文件）。 */
 /* 友好名 → 真实权重文件名。用户看到的是档位名，发给后端的还得是 .gguf。 */
 function realModelName(name) {
@@ -975,8 +975,6 @@ function drawerAbout() {
   <div class="sec"><div class="sec-h">这些模型是谁写的</div>
     <div class="doc"><ul>
       <li><b>Lumen H1 Turbo / mini se / V1 Ultra</b>：由<b>「想念也是麻烦」制作</b>。</li>
-      <li><b>Lumen Core 3B</b>：底层是阿里开源的 <b>Qwen2.5-3B-Instruct</b>（Apache-2.0）。
-        Lumen <b>只做集成、量化分发与 Vulkan 加速，没有自行训练或改写权重</b>。</li>
       <li>各档位的上游来源与许可证声明见 <b>licenses/</b> 目录（安装包内必须保留，不可删除）。</li>
       <li>「档位」是能力定位，「权重」才是真正跑起来的东西——界面显示的档位名与实际加载的权重永远一致。</li>
     </ul></div>

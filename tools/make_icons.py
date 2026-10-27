@@ -16,8 +16,12 @@
 import os
 from PIL import Image, ImageDraw, ImageFilter
 
-SRC = r"C:\Users\Administrator\.workbuddy\clipboard-images\clipboard-2026-10-27T12-58-35-616Z-9352a805.png"
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web", "assets")
+# 品牌源图（青碧星球 + 轨道环）。放在仓库内的 tools/assets/ 下，
+# 这样脚本在任何机器上都能跑，不依赖某个开发环境的本地路径。
+# 想换图：覆盖 tools/assets/brand-source.png，或设环境变量 LUMEN_BRAND_SRC。
+HERE = os.path.dirname(os.path.abspath(__file__))
+SRC = os.environ.get("LUMEN_BRAND_SRC") or os.path.join(HERE, "assets", "brand-source.png")
+OUT = os.path.join(HERE, "..", "web", "assets")
 OUT = os.path.abspath(OUT)
 
 # 与品牌一致的青碧色
@@ -80,6 +84,10 @@ def small_size_variant(im: Image.Image, size: int) -> Image.Image:
 
 
 def main():
+    if not os.path.isfile(SRC):
+        raise SystemExit(f"找不到品牌源图：{SRC}\n"
+                         f"请把源图放到 tools/assets/brand-source.png，"
+                         f"或设环境变量 LUMEN_BRAND_SRC 指向它。")
     os.makedirs(OUT, exist_ok=True)
     src = load()
 

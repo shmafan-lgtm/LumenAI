@@ -34,10 +34,10 @@ STATE_PATH = os.path.join(config.DATA_DIR, "weights.json")
 # urls 按顺序尝试：镜像优先（国内更快），官方仓库兜底。
 CATALOG: list[dict] = [
     {
-        "id": "gpt-oss-20b-q4",
+        "id": "h1-turbo-q4",
         "tier": "h1",
-        "title": "H1 Turbo 建议权重 · gpt-oss-20b",
-        "file": "gpt-oss-20b-Q4_K_M.gguf",
+        "title": "Lumen H1 Turbo 权重 · H1-Turbo-Q4_K_M.gguf",
+        "file": "H1-Turbo-Q4_K_M.gguf",
         "bytes": 11624759488,
         "size_gb": 10.8,
         "license": "Apache-2.0",

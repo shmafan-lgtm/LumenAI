@@ -80,7 +80,7 @@ TIERS: list[dict] = [
         "runtime": "llamacpp",
         "runtime_label": "内置 llama.cpp · 也可挂 Ollama / OpenAI 兼容端点",
         "model_file": "H1-Turbo-Q4_K_M.gguf",
-        "model_files": ["H1-Turbo-Q4_K_M.gguf", "gpt-oss-20b-Q4_K_M.gguf"],
+        "model_files": ["H1-Turbo-Q4_K_M.gguf"],
         "credit": "由「想念也是麻烦」制作",
         "show_source": False,
         "source": "",

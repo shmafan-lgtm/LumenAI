@@ -3,6 +3,12 @@ Lumen H1 Turbo — 第三方许可证声明（NOTICE）
 本文件为 Lumen H1 Turbo 档位随附的第三方许可证声明，属于合规必需文件，
 随软件一同分发。请勿删除、改名或移除本文件。
 
+H1 Turbo 档位可用的权重来自两个上游开源模型，按各自许可证的要求，
+下列版权声明与许可声明必须随分发物一并保留。
+
+================================================================
+一、MIT 上游（Lumen 自备权重）
+================================================================
 Lumen H1 Turbo 的权重基于上游第三方开源模型构建，上游以 MIT 许可证发布。
 按 MIT 许可证要求，下列版权声明与许可声明必须随分发物保留。
 
@@ -29,14 +35,47 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+================================================================
+二、Apache-2.0 上游（Lumen 权重仓库中提供的可选装配权重）
+================================================================
+背景：H1 Turbo 档位的产品定义是「32B 级 MoE 稀疏激活 + 原生 Agentic Coding」。
+除作者自备的 MIT 上游权重外，Lumen 的「权重仓库」还提供了一份可直接下载、
+可直接装配的 Apache-2.0 MoE 权重（该权重在 Lumen 内部以档位名
+H1-Turbo-Q4_K_M.gguf 分发），让这一档在没有自备权重时也能真正跑起来。
+两者都是 MoE 稀疏激活结构，档位定位一致。
+
+按 Apache License 2.0 第 4(d) 条要求，下列版权声明与许可声明必须随分发物保留。
+
+----------------------------------------------------------------
+上游项目：openai/gpt-oss-20b
+许可证：Apache License 2.0
+----------------------------------------------------------------
+Copyright 2025 OpenAI
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
 ----------------------------------------------------------------
 补充说明
 ----------------------------------------------------------------
 1. 本档位在 Lumen 主界面与「关于」页不展示原始来源，这是产品层面的展示约定，
    不影响本文件所载许可证义务。
-2. 如果你从第三方渠道获取 H1-Turbo 权重，请把该渠道随附的 LICENSE / NOTICE
+2. 权重文件的**文件名**由 Lumen 统一命名为档位名（H1-Turbo-Q4_K_M.gguf），
+   便于用户识别；上游项目名与许可证义务以本文件记载为准。
+3. 如果你从第三方渠道获取 H1-Turbo 权重，请把该渠道随附的 LICENSE / NOTICE
    文件一并保留在 licenses/ 目录下。
-3. 量化文件为 Q4_K_M GGUF，由 Lumen 侧完成转换与打包；量化不改变上游许可证义务。
-4. 制作与打包：由「想念也是麻烦」完成。
+4. 量化文件为 Q4_K_M GGUF，由 Lumen 侧完成转换与打包；量化不改变上游许可证义务。
+5. 若你自行从其他渠道获取第二部分所述的权重，请把该渠道随附的 LICENSE /
+   NOTICE 文件一并保留在 licenses/ 目录下。
+6. 制作与打包：由「想念也是麻烦」完成。
 
 Lumen 本体、界面与工具链的著作权归其作者所有。
