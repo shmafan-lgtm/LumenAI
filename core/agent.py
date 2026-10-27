@@ -398,6 +398,13 @@ _THINK_PATH_RE = re.compile(
     r"(?:path|file|cwd|dir(?:ectory)?)\s*[:=]\s*[\"'“]?([^\s\"'”，,;]{2,200})", re.I)
 # 模型也常写成「list files in C:/xxx/yyy」这种不带前缀的形式
 _THINK_ABSPATH_RE = re.compile(r"([A-Za-z]:[\\/][^\s\"'<>|]{2,200})")
+# 「create file hello.py」里的文件名
+_THINK_FILE_RE = re.compile(
+    r"\b([\w.\-]{1,60}\.(?:py|js|ts|tsx|txt|md|json|csv|html|css|sh|bat|yaml|yml|xml|log))\b")
+# 内容：优先抓引号里的代码片段或 print(...) 调用
+_THINK_CODE_RE = re.compile(
+    r"((?:print|console\.log|echo)\s*\([^)\n]{0,220}\)"
+    r"|['\"][^'\"\n]{4,400}['\"])")
 _THINK_CMD_RE = re.compile(
     r"(?:cmd|command|run)\s*[:=]\s*[\"'“]?([^\"'”\n]{2,300})", re.I)
 _THINK_CMD_VERB_RE = re.compile(
@@ -492,7 +499,24 @@ def _infer_call_from_reasoning(reasoning: str) -> list[dict]:
                 else:
                     calls.append({"name": "fs_ls", "args": {"path": p or "."}})
             else:
-                if p:
+                # fs_write / fs_append：模型通常写「create file hello.py in that directory」
+                # 路径要从文件名 + 最近的目录推出来，内容从引号里的代码片段取。
+                if nm == "fs_write":
+                    fname_m = _THINK_FILE_RE.search(seg) or _THINK_FILE_RE.search(text)
+                    fname = fname_m.group(1) if fname_m else None
+                    code_m = _THINK_CODE_RE.search(seg) or _THINK_CODE_RE.search(text)
+                    content = code_m.group(1).strip("'\"") if code_m else None
+                    if fname and content:
+                        target = p or find_by_name(fname)
+                        if not target:
+                            # 放在模型最近提到的那个目录里
+                            dirs = [rel_path(x) for x in _THINK_ABSPATH_RE.findall(text)]
+                            dirs = [d for d in dirs if d]
+                            base = dirs[-1] if dirs else "."
+                            target = (base + "/" + fname).strip("/")
+                        calls.append({"name": "fs_write",
+                                      "args": {"path": target, "content": content}})
+                elif p:
                     calls.append({"name": nm, "args": {"path": p}})
         elif nm == "run_cmd":
             m = _THINK_CMD_RE.search(seg)

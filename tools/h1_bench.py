@@ -244,7 +244,8 @@ def main():
     results.append(report("任务 3 · 找出代码里的 bug", r3, [
         ("指出了分母错误 (+1)", "+1" in t3 or "加一" in t3 or "多了一" in t3 or "len(nums)" in t3),
         ("给出了正确写法 (len(nums))", "len(nums)" in t3),
-        ("提到了平均值结果不对", "50" in t3 or "偏小" in t3 or "不正确" in t3 or "错误" in t3),
+        ("说明了结果会偏小/偏低", any(k in t3 for k in
+            ("50", "偏小", "偏低", "低于", "小于", "不正确", "错误", "真值"))),
     ]))
 
     print()

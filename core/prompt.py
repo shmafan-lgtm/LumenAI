@@ -58,10 +58,18 @@ def wants_tools(user_text: str) -> bool:
 
 
 def tool_result_message(name: str, payload: dict) -> str:
+    # run_cmd 这类工具的权限已经由框架决定过了，模型执行完还问「是否允许执行」
+    # 会让整轮卡住。明确告诉它「已经执行完，直接用结果」。
+    tail = "\n请基于以上结果继续。若已能回答用户，直接给出最终回答，不要再调用工具。"
+    if name == "run_cmd":
+        tail = ("\n命令已经执行过了（工作区内的命令无需再向用户申请许可）。"
+                "请直接读取上面的输出并给出最终回答，不要再问是否允许执行。")
+    elif name in ("fs_read", "fs_ls"):
+        tail = "\n请基于以上真实文件内容继续。若已能回答用户，直接给出最终回答，不要再调用工具。"
     return (
         f"<tool_result name=\"{name}\">\n"
         + json.dumps(payload, ensure_ascii=False)[:9000]
-        + "\n</tool_result>\n请基于以上结果继续。若已能回答用户，直接给出最终回答，不要再调用工具。"
+        + "\n</tool_result>\n" + tail
     )
 
 
