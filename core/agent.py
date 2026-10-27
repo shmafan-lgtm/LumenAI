@@ -528,8 +528,26 @@ NEEDS_FRESH = re.compile(
 )
 HEDGE = re.compile(r"(我不确定|不确定|无法确认|据我所知|截至我|我的知识|可能已经|建议你自行核实|不确定是否)")
 
+# 关于 Lumen 自身身份的问题：答案就在系统提示词里，检索只会召回
+# 「你（汉语文字）_百度百科」这类字词释义条目，挂在「引用来源」里非常不专业。
+IDENTITY_Q = re.compile(
+    r"(你是谁|你叫什么|你是什么模型|你是.*(模型|助手|ai|AI)|谁做的|谁写的|谁开发|开发者是|"
+    r"制作人|制造者|出品方|谁制造|哪个公司|什么公司|你属于|你的作者|开发团队|"
+    r"你是由谁|你由谁|谁家的|你姓什么|"
+    r"(你|您|它|lumen|Lumen)\s*(是|叫)\s*(什么|啥)\s*(模型|助手|ai|AI))")
+
+
+def is_identity_question(text: str) -> bool:
+    """判断问题是否在问 Lumen 自己的身份/制作人。"""
+    t = (text or "").strip()
+    if not t or len(t) > 60:
+        return False
+    return bool(IDENTITY_Q.search(t))
+
 
 def heuristic_search(user_text: str, answer: str) -> bool:
+    if is_identity_question(user_text):
+        return False
     if NEEDS_FRESH.search(user_text or "") and len(user_text) < 200:
         return True
     return bool(HEDGE.search(answer or ""))
@@ -665,7 +683,7 @@ class Runner:
         # 离线：规则引擎直接给结果，尽量把搜索价值体现出来
         if eng_status.get("fallback"):
             ctx = []
-            if search_on:
+            if search_on and not is_identity_question(user_text):
                 self.emit({"type": "status", "text": "离线规则引擎：先联网检索资料…"})
                 r = search.search(user_text, limit=int(se.get("max_results", 6)))
                 ctx = r["results"]
@@ -689,7 +707,7 @@ class Runner:
         # 预检索：问题明显需要时效性资料时，先把资料放到首轮上下文里，
         # 小模型（3B 级）很难自己触发检索，先喂资料比让它「知道自己不知道」可靠得多。
         pre_ctx: list[dict] = []
-        if search_on and heuristic_search(user_text, ""):
+        if search_on and not is_identity_question(user_text) and heuristic_search(user_text, ""):
             self.emit({"type": "status", "text": "问题涉及最新信息，正在联网检索…"})
             try:
                 r0 = search.search(user_text, limit=int(se.get("max_results", 6)))
@@ -797,25 +815,32 @@ class Runner:
                     else:
                         want = heuristic_search(user_text, body_wo_tags)
                 if want:
-                    searched = True
-                    before_len = len(body_wo_tags)
-                    self.emit({
-                        "type": "status",
-                        "text": f"置信度 {conf if conf is not None else '未知'}，触发联网检索…" if not always_search else "始终检索模式：正在检索…",
-                    })
-                    r = search.search(user_text, limit=int(se.get("max_results", 6)))
-                    if r["results"]:
-                        sources = search.citable_sources(r["results"])
-                        self.emit({"type": "sources", "sources": sources, "provider": r["provider"]})
-                        convo.append({"role": "assistant", "content": raw[:2000] or "（准备检索）"})
-                        convo.append({"role": "user", "content": prompt.rag_block(
-                            r["results"], deep=tier["id"] != "core", deep_n=2)})
-                        if before_len < 40:
-                            # 原回答太短（模型直接说不知道），清掉重答
-                            self.emit({"type": "reset"})
-                        continue
+                    if is_identity_question(user_text):
+                        # 这是问 Lumen 自己是谁做的 —— 答案在系统提示词里，
+                        # 检索出来的是「你（汉语文字）_百度百科」这种噪声条目，别挂上去。
+                        want = False
+                        self.emit({"type": "status",
+                                   "text": "这是关于 Lumen 自身的问题，直接回答，不做联网检索"})
                     else:
-                        self.emit({"type": "status", "text": "检索无结果，继续用模型记忆回答"})
+                        searched = True
+                        before_len = len(body_wo_tags)
+                        self.emit({
+                            "type": "status",
+                            "text": f"置信度 {conf if conf is not None else '未知'}，触发联网检索…" if not always_search else "始终检索模式：正在检索…",
+                        })
+                        r = search.search(user_text, limit=int(se.get("max_results", 6)))
+                        if r["results"]:
+                            sources = search.citable_sources(r["results"])
+                            self.emit({"type": "sources", "sources": sources, "provider": r["provider"]})
+                            convo.append({"role": "assistant", "content": raw[:2000] or "（准备检索）"})
+                            convo.append({"role": "user", "content": prompt.rag_block(
+                                r["results"], deep=tier["id"] != "core", deep_n=2)})
+                            if before_len < 40:
+                                # 原回答太短（模型直接说不知道），清掉重答
+                                self.emit({"type": "reset"})
+                            continue
+                        else:
+                            self.emit({"type": "status", "text": "检索无结果，继续用模型记忆回答"})
 
                 # 回答过短（模型空转 / 被长资料压垮）→ 基于已有资料让它再答一次，
                 # 而不是把一段空白交出去。

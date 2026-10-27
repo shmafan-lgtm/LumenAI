@@ -229,6 +229,36 @@ def _cache_key(q: str) -> str:
 # --------------------------------------------------------------- 主流程
 
 
+# 搜索引擎的噪声源：字词释义、影视主题曲、人物词条这类条目与真实问题往往无关。
+# 典型场景：模型把「你是由谁制作的」里的「你」当成检索词，
+# 结果全是「你（汉语文字）_百度百科」这种垃圾条目，出现在「引用来源」里非常不专业。
+_NOISE_TITLE_RE = re.compile(
+    r"(_百度百科|-百度百科|_百度汉语|—百度百科|的拼音|的意思|读音|注音|歌词|主题曲|片头曲|片尾曲|"
+    r"个人简介|人物经历|汉语字典|新华字典|字义|组词)", re.I)
+_NOISE_HOSTS = ("baike.baidu.com", "dict.baidu.com", "baike.so.com", "hanyu.baidu.com",
+                "zuowenku.baidu.com", "www.baike.com")
+_STOPWORD_ONLY = {"你", "我", "他", "她", "它", "您", "咱", "谁", "的", "了", "吗", "呢", "啊",
+                   "你谁", "是谁", "什么", "哪个", "哪些", "怎么", "为什么"}
+
+
+def _is_noise(item: dict) -> bool:
+    """判断一条检索结果是不是与问题无关的噪声条目。"""
+    title = (item.get("title") or "").strip()
+    url = (item.get("url") or "").lower()
+    if not title and not (item.get("snippet") or ""):
+        return True
+    for host in _NOISE_HOSTS:
+        if host in url:
+            return True
+    if _NOISE_TITLE_RE.search(title):
+        return True
+    # 标题只有一个字（「你」「我」这类）—— 基本可以断定是拆词检索的结果
+    core = re.sub(r"[\s\-—_（）()《》·,，。.、]", "", title)
+    if len(core) <= 1:
+        return True
+    return False
+
+
 def _dedupe(items: Iterable[dict], limit: int) -> list[dict]:
     seen_url, seen_title, out = set(), set(), []
     for it in items:
@@ -237,6 +267,8 @@ def _dedupe(items: Iterable[dict], limit: int) -> list[dict]:
         if not u or u in seen_url or (t and t in seen_title):
             continue
         if not (it.get("snippet") or it.get("title")):
+            continue
+        if _is_noise(it):
             continue
         seen_url.add(u)
         if t:
@@ -248,10 +280,29 @@ def _dedupe(items: Iterable[dict], limit: int) -> list[dict]:
     return out
 
 
+def normalize_query(query: str) -> str:
+    """把只剩代词/停用词的检索词换成有意义的说法。
+
+    「你」「是谁」这类词拿去检索只会召回字词释义条目，
+    宁可让模型直接回答，也不要给它一堆垃圾资料。
+    """
+    q = (query or "").strip()
+    core = re.sub(r"[\s，。？！?!,.\"'「」《》()（）]", "", q)
+    if core and core.lower() in _STOPWORD_ONLY:
+        return ""
+    return q
+
+
 def search(query: str, limit: int | None = None, use_cache: bool = True) -> dict:
     st = config.settings().get("search") or {}
     limit = int(limit or st.get("max_results", 6))
     ttl = float(st.get("cache_hours", 24)) * 3600
+
+    query = normalize_query(query)
+    if not query:
+        # 检索词只剩代词/停用词：检索出来的一定是字词释义这类垃圾，直接不检索
+        return {"query": "", "results": [], "cached": False, "provider": "",
+                "took_ms": 0, "skipped": "检索词无实际内容，已跳过检索"}
     key = _cache_key(query)
 
     if use_cache:
@@ -367,11 +418,14 @@ def strip_tags(text: str) -> str:
 
 
 def citable_sources(results: list[dict]) -> list[dict]:
+    """生成「引用来源」列表。噪声条目不进列表 —— 宁可少给，也不挂一堆不相干的百科。"""
     out = []
-    for i, r in enumerate(results, 1):
+    for r in results:
+        if _is_noise(r):
+            continue
         out.append(
             {
-                "index": i,
+                "index": len(out) + 1,
                 "title": r.get("title", ""),
                 "url": r.get("url", ""),
                 "snippet": (r.get("snippet") or "")[:280],

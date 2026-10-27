@@ -45,7 +45,7 @@ function toast(msg, kind = '') {
 }
 
 /* ------------------------------------------------------------- markdown */
-function md(src) {
+function md(src, keepCite) {
   if (!src) return '';
   const blocks = [];
   let text = String(src).replace(/\r\n/g, '\n');
@@ -63,7 +63,13 @@ function md(src) {
     s = s.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
     s = s.replace(/\[([^\]\n]{1,80})\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
     s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)）]+)/g, '$1<a href="$2" target="_blank" rel="noreferrer">$2</a>');
-    s = s.replace(/\[(\d{1,2})\]/g, '<sup class="cite">[$1]</sup>');
+    // 没有引用来源时，把正文里孤立的 [1] 标记去掉——挂着没有对应的来源卡片，
+    // 读者只看到一堆方括号，很不专业。
+    if (keepCite === false) {
+      s = s.replace(/\s*\[(\d{1,2})\]/g, '');
+    } else {
+      s = s.replace(/\[(\d{1,2})\]/g, '<sup class="cite">[$1]</sup>');
+    }
     return s;
   };
 
@@ -134,6 +140,38 @@ function md(src) {
 /* --------------------------------------------------------------- render */
 function tierById(id) { return S.tiers.find((t) => t.id === id) || S.tiers[0] || {}; }
 
+/* 界面上一律显示档位名，不显示权重的原始文件名。
+   例如 gpt-oss-20b-Q4_K_M.gguf → Lumen H1 Turbo。
+   用户自己放进 models/ 的权重保留原名（那是用户自己的文件）。 */
+/* 友好名 → 真实权重文件名。用户看到的是档位名，发给后端的还得是 .gguf。 */
+function realModelName(name) {
+  const v = String(name || '').trim();
+  if (!v) return v;
+  // 当前引擎正在跑的就是这个档位 → 用真正在跑的那个文件名
+  const engModel = (S.engine && S.engine.model) || '';
+  if (engModel && friendlyModel(engModel) === v) return engModel;
+  const t = (S.tiers || []).find((x) => x.name === v);
+  if (t) return t.model_file || (t.model_files || [])[0] || v;
+  return v;
+}
+
+function friendlyModel(name) {
+  if (!name) return '';
+  const n = String(name).trim();
+  for (const t of (S.tiers || [])) {
+    const files = t.model_files || [];
+    if (files.includes(n)) return t.name;
+  }
+  // 兜底：按去掉扩展名后的前缀匹配（模型列表接口可能返回带路径的完整文件名）
+  const base = n.split(/[\\/]/).pop();
+  for (const t of (S.tiers || [])) {
+    for (const f of (t.model_files || [])) {
+      if (f === base) return t.name;
+    }
+  }
+  return n;
+}
+
 function renderSidebar() {
   const box = $('#sessionList');
   if (!S.sessions.length) { box.innerHTML = '<div class="session-empty">还没有对话</div>'; return; }
@@ -164,7 +202,7 @@ function renderTopbar() {
     else if (backend === 'onnx') label = '本地引擎 · ONNX';
     engTag.className = 'tag';
     engTag.textContent = label;
-    engTag.title = `${S.engine.model || ''} · ${S.engine.base_url || ''}`;
+    engTag.title = `${friendlyModel(S.engine.model) || ''} · ${S.engine.base_url || ''}`;
   }
   $('#agentTag').className = 'tag ghost' + (agentEnabled() ? '' : ' dim');
   $('#agentTag').textContent = agentEnabled() ? 'Agent 已启用' : 'Agent 关闭';
@@ -194,7 +232,7 @@ function msgHTML(m, idx) {
   if (m.role === 'user') {
     return `<div class="msg me" data-i="${idx}">
       <div class="avatar">你</div>
-      <div class="bubble"><div class="body">${md(m.content)}</div></div>
+      <div class="bubble"><div class="body">${md(m.content, false)}</div></div>
     </div>`;
   }
   const meta = m.meta || {};
@@ -213,7 +251,7 @@ function msgHTML(m, idx) {
     <div class="avatar"><img src="/assets/logo-round.png" alt=""></div>
     <div class="bubble">
       ${reason}
-      <div class="body">${md(m.content)}</div>
+      <div class="body">${md(m.content, (meta.sources || []).length > 0)}</div>
       ${tools}
       ${srcs}
       <div class="meta-row">${badges}
@@ -333,7 +371,7 @@ async function send(text) {
     if (!dirty) return;
     dirty = false;
     const bodyEl = host.querySelector('.body');
-    if (bodyEl) bodyEl.innerHTML = md(buf) + (S.streaming ? '<span class="caret"></span>' : '');
+    if (bodyEl) bodyEl.innerHTML = md(buf, sources.length > 0) + (S.streaming ? '<span class="caret"></span>' : '');
     scrollBottom();
   };
 
@@ -750,20 +788,21 @@ function drawerSettings() {
     <div class="field"><label>端点地址<span class="hint">Ollama 11434 / llama.cpp 8080 / LM Studio 1234</span></label>
       <input type="text" id="f-base" value="${esc(en.base_url || '')}" style="width:170px"></div>
     <div class="field"><label>模型名<span class="hint">留空则自动匹配当前档位</span></label>
-      <input type="text" id="f-model" value="${esc(en.model || '')}" style="width:170px"></div>
+      <input type="text" id="f-model" value="${esc(friendlyModel(en.model))}" style="width:170px"
+             title="填档位名（如 Lumen H1 Turbo）或权重文件名"></div>
     <div class="field"><label>上下文长度</label>
       <input type="number" id="f-ctx" value="${en.num_ctx || 8192}" step="1024" min="2048" max="262144"></div>
     <div class="field"><label>温度</label>
       <input type="number" id="f-temp" value="${en.temperature ?? 0.6}" step="0.05" min="0" max="2"></div>
     <div class="btn-row"><button class="btn sm" id="btnRedetect">重新探测端点</button>
       <button class="btn sm primary" id="btnSaveEngine">保存</button></div>
-    <div class="card note" id="engInfo">${esc(S.engine && S.engine.fallback ? '当前未检测到本地模型端点，使用离线规则引擎。' : '已连接：' + (S.engine.base_url || '') + ' · ' + (S.engine.model || ''))}</div>
+    <div class="card note" id="engInfo">${esc(S.engine && S.engine.fallback ? '当前未检测到本地模型端点，使用离线规则引擎。' : '已连接：' + (S.engine.base_url || '') + ' · ' + friendlyModel(S.engine.model))}</div>
   </div>
 
   <div class="sec"><div class="sec-h">内置推理运行时</div>
     <div class="kv"><span>状态</span><b>${lc.running ? (lc.backend === 'vulkan' ? '运行中 · Vulkan GPU' : (lc.backend === 'cpu' ? '运行中 · CPU' : '运行中')) : (lc.available ? '已就绪 · 未启动' : '运行时缺失')}</b></div>
-    <div class="kv"><span>当前模型</span><b>${esc(lc.model || '—')}</b></div>
-    <div class="kv"><span>可用权重</span><b>${esc((lc.models || []).join('、') || 'models/ 下没有 .gguf')}</b></div>
+    <div class="kv"><span>当前模型</span><b>${esc(friendlyModel(lc.model) || '—')}</b></div>
+    <div class="kv"><span>可用权重</span><b>${esc((lc.models || []).map(friendlyModel).join('、') || 'models/ 下没有 .gguf')}</b></div>
     <div class="btn-row">
       <button class="btn sm" id="btnLcStart">启动</button>
       <button class="btn sm" id="btnLcStop">停止</button>
@@ -926,19 +965,19 @@ function drawerAbout() {
     <div class="note">所有推理、文件操作、代码修改都在本机执行。手机同步走局域网 / 虚拟内网，不经过第三方服务器。</div>
   </div>
 
-  <div class="sec"><div class="sec-h">三档一览</div>
+  <div class="sec"><div class="sec-h">档位一览</div>
     ${S.tiers.map((x) => `<div class="card">
-      <div class="kv"><span>${esc(x.name)} <span class="pill ${x.available ? 'good' : 'bad'}">${x.available ? '可用' : '需 ' + x.min_vram_gb + 'GB'}</span></span><b>≥${x.min_vram_gb}GB</b></div>
+      <div class="kv"><span>${esc(x.name)} <span class="pill ${x.available ? 'good' : 'bad'}">${x.available ? '可用' : '需 ' + x.min_vram_gb + 'GB'}</span></span><b>${esc(x.badge || '')}</b></div>
       <div class="note">${esc((x.strengths || []).slice(0, 2).join(' · '))}</div>
     </div>`).join('')}
   </div>
 
   <div class="sec"><div class="sec-h">这些模型是谁写的</div>
     <div class="doc"><ul>
+      <li><b>Lumen H1 Turbo / mini se / V1 Ultra</b>：由<b>「想念也是麻烦」制作</b>。</li>
       <li><b>Lumen Core 3B</b>：底层是阿里开源的 <b>Qwen2.5-3B-Instruct</b>（Apache-2.0）。
         Lumen <b>只做集成、量化分发与 Vulkan 加速，没有自行训练或改写权重</b>。</li>
-      <li><b>Lumen H1 Turbo / mini se / V1 Ultra</b>：由「有事想念也是麻烦」制作或修改增强，
-        各自的上游来源与许可证声明见 <b>licenses/</b> 目录（不可删除）。</li>
+      <li>各档位的上游来源与许可证声明见 <b>licenses/</b> 目录（安装包内必须保留，不可删除）。</li>
       <li>「档位」是能力定位，「权重」才是真正跑起来的东西——界面显示的档位名与实际加载的权重永远一致。</li>
     </ul></div>
   </div>
@@ -991,7 +1030,7 @@ function bindDrawer() {
         settings: {
           engine: {
             base_url: $('#f-base').value.trim(),
-            model: $('#f-model').value.trim(),
+            model: realModelName($('#f-model').value.trim()),
             num_ctx: +$('#f-ctx').value,
             temperature: +$('#f-temp').value,
           },
