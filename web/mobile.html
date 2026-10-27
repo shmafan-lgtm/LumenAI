@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#08090B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Lumen 手机端</title>
+<style>
+:root{--bg:#08090B;--panel:#101319;--panel2:#151A22;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);
+--txt:#E9EAEE;--txt2:#9AA1AC;--txt3:#6B7280;--gold:#E4B77C;--golddim:rgba(228,183,124,.14);--teal:#5FD3B6;--red:#F0736A;
+--mono:"JetBrains Mono",Consolas,monospace}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--txt);font:15px/1.6 -apple-system,"PingFang SC","Microsoft YaHei UI",system-ui,sans-serif;overflow:hidden;
+background-image:radial-gradient(700px 380px at 50% -10%,rgba(228,183,124,.13),transparent 65%)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0}
+svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;overflow:hidden}
+
+/* ---------- 登录 ---------- */
+#login{align-items:center;justify-content:center;padding:26px;overflow-y:auto}
+.login-card{width:100%;max-width:400px;text-align:center;animation:rise .5s ease both}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.mark{width:64px;height:64px;border-radius:21px;margin:0 auto 18px;display:grid;place-content:center;font-weight:700;font-size:28px;color:#1a1206;
+background:linear-gradient(150deg,#F2D3A2,#E4B77C 58%,#B98F52);box-shadow:0 14px 44px rgba(228,183,124,.35)}
+h1{font-size:23px;font-weight:600;margin:0 0 6px;letter-spacing:-.01em}
+.sub{color:var(--txt3);font-size:13px;margin:0 0 24px}
+.seg{display:flex;background:rgba(255,255,255,.05);border-radius:11px;padding:3px;margin-bottom:16px;border:1px solid var(--line)}
+.seg button{flex:1;padding:8px;border-radius:8px;font-size:13.5px;color:var(--txt3);transition:.18s}
+.seg button.on{background:rgba(255,255,255,.1);color:var(--txt)}
+.inp{width:100%;padding:13px 15px;border-radius:12px;border:1px solid var(--line2);background:rgba(255,255,255,.045);
+color:var(--txt);font-size:15px;outline:0;margin-bottom:11px;transition:.18s}
+.inp:focus{border-color:rgba(228,183,124,.5);background:rgba(255,255,255,.07)}
+.btn{width:100%;padding:14px;border-radius:12px;font-size:15px;font-weight:600;color:#1a1206;
+background:linear-gradient(150deg,#F2D3A2,#E4B77C 60%,#C79A5C);box-shadow:0 10px 30px rgba(228,183,124,.25);transition:.16s}
+.btn:active{transform:scale(.985);filter:brightness(.96)}
+.btn.ghost{background:rgba(255,255,255,.06);color:var(--txt);border:1px solid var(--line2);box-shadow:none;font-weight:500}
+.err{color:var(--red);font-size:12.5px;min-height:18px;margin-top:10px}
+
+/* ---------- 主界面 ---------- */
+#main{display:none}
+#main.on{display:flex}
+.top{flex:none;padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;display:flex;align-items:center;gap:10px;
+border-bottom:1px solid var(--line);background:rgba(10,12,16,.7);backdrop-filter:blur(16px);position:relative;z-index:5}
+.top .ttl{flex:1;min-width:0}
+.top .ttl b{display:block;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .ttl span{font-size:11px;color:var(--txt3);font-family:var(--mono)}
+.icon{width:36px;height:36px;border-radius:10px;display:grid;place-content:center;color:var(--txt2);flex:none}
+.icon:active{background:rgba(255,255,255,.08)}
+.body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px 20px}
+.pane{display:none}.pane.on{display:block}
+.tabbar{flex:none;display:flex;padding:6px 10px calc(env(safe-area-inset-bottom) + 6px);border-top:1px solid var(--line);
+background:rgba(10,12,16,.92);backdrop-filter:blur(16px)}
+.tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 0;border-radius:10px;color:var(--txt3);font-size:10.5px}
+.tabbar button.on{color:var(--gold)}
+.tabbar svg{width:21px;height:21px}
+
+.card{background:linear-gradient(170deg,rgba(255,255,255,.055),rgba(255,255,255,.015));border:1px solid var(--line);
+border-radius:14px;padding:14px;margin-bottom:10px}
+.card:active{background:rgba(255,255,255,.08)}
+.row{display:flex;align-items:center;gap:10px}
+.row .g{flex:1;min-width:0}
+.row b{font-size:14px;font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row span{font-size:11.5px;color:var(--txt3)}
+.pill{font-size:10.5px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--txt3)}
+.pill.ok{color:var(--teal);border-color:rgba(95,211,182,.3);background:rgba(95,211,182,.1)}
+.pill.bad{color:var(--red);border-color:rgba(240,115,106,.3);background:rgba(240,115,106,.1)}
+.pill.gold{color:var(--gold);border-color:rgba(228,183,124,.3);background:var(--golddim)}
+.sect{font-size:11px;letter-spacing:.14em;color:var(--txt3);margin:18px 4px 9px}
+.note{font-size:12px;color:var(--txt3);line-height:1.65}
+.hr{height:1px;background:var(--line);margin:12px 0}
+
+/* ---------- 对话 ---------- */
+#chatBody{padding-bottom:8px}
+.msg{margin-bottom:14px;display:flex}
+.msg.me{justify-content:flex-end}
+.bub{max-width:86%;padding:10px 13px;border-radius:14px;font-size:14.6px;line-height:1.65;word-break:break-word}
+.msg.me .bub{background:rgba(255,255,255,.07);border:1px solid var(--line);border-bottom-right-radius:5px}
+.msg.ai .bub{background:transparent;border:1px solid var(--line);border-bottom-left-radius:5px;max-width:94%}
+.bub code{font-family:var(--mono);font-size:12.4px;background:rgba(255,255,255,.09);padding:1px 4px;border-radius:4px}
+.bub pre{background:#0A0C10;border:1px solid var(--line);border-radius:9px;padding:10px;overflow-x:auto;font-family:var(--mono);font-size:12px;margin:8px 0}
+.bub p{margin:.5em 0}.bub p:first-child{margin-top:0}.bub p:last-child{margin-bottom:0}
+.bub ul,.bub ol{padding-left:1.2em;margin:.5em 0}
+.bub a{color:var(--gold)}
+.src{margin-top:8px;font-size:11.5px;color:var(--txt3)}
+.src a{display:block;color:var(--txt2);text-decoration:none;padding:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.composer{flex:none;display:flex;gap:8px;align-items:flex-end;padding:8px 12px calc(env(safe-area-inset-bottom) + 8px);
+border-top:1px solid var(--line);background:rgba(10,12,16,.94);backdrop-filter:blur(16px)}
+.composer textarea{flex:1;min-height:42px;max-height:110px;padding:10px 13px;border-radius:12px;border:1px solid var(--line2);
+background:rgba(255,255,255,.05);color:var(--txt);font:15px/1.4 inherit;outline:0;resize:none}
+.send{width:42px;height:42px;border-radius:12px;display:grid;place-content:center;flex:none;color:#1a1206;
+background:linear-gradient(150deg,#F2D3A2,#E4B77C 60%,#C79A5C)}
+.send svg{width:18px;height:18px;fill:currentColor;stroke:none}
+
+/* ---------- 远控 ---------- */
+.pad{height:min(46vh,320px);border-radius:18px;border:1px dashed rgba(228,183,124,.3);background:
+radial-gradient(circle at 50% 50%,rgba(228,183,124,.09),rgba(255,255,255,.02) 70%);position:relative;
+touch-action:none;display:grid;place-items:center;overflow:hidden;margin-bottom:12px}
+.pad.live{border-style:solid;border-color:rgba(95,211,182,.45);background:radial-gradient(circle at 50% 50%,rgba(95,211,182,.1),rgba(255,255,255,.02) 70%)}
+.pad .hint{color:var(--txt3);font-size:12.5px;text-align:center;pointer-events:none;line-height:1.7}
+.dotp{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--gold);box-shadow:0 0 18px rgba(228,183,124,.7);
+transform:translate(-50%,-50%);pointer-events:none;opacity:0;transition:opacity .2s}
+.pad.touch .dotp{opacity:1}
+.btns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.k{display:flex;flex-direction:column;align-items:center;gap:3px;padding:12px 6px;border-radius:12px;border:1px solid var(--line);
+background:rgba(255,255,255,.045);font-size:11.5px;color:var(--txt2);transition:.12s}
+.k:active{background:rgba(228,183,124,.16);border-color:rgba(228,183,124,.4);color:var(--gold);transform:scale(.97)}
+.k svg{width:18px;height:18px}
+.klabel{font-size:11px;color:var(--txt3);margin:14px 4px 8px}
+.krow{display:flex;gap:8px;margin-bottom:8px}
+.krow button{flex:1;padding:11px;border-radius:11px;border:1px solid var(--line);background:rgba(255,255,255,.04);font-size:12.5px;color:var(--txt2)}
+.krow button:active{background:rgba(228,183,124,.15);color:var(--gold)}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:rgba(24,28,36,.96);border:1px solid var(--line2);
+padding:9px 16px;border-radius:11px;font-size:13px;z-index:99;opacity:0;transition:.25s;pointer-events:none;max-width:80vw;text-align:center}
+.toast.on{opacity:1}
+
+/* ===== Lumen 思考动效「星核」 ===== */
+/* ============================================================
+   Lumen 思考动效 ——「星核」
+   ------------------------------------------------------------
+   设计说明（原创，不模仿任何现有产品的具体形象）：
+   以 Lumen 品牌图标的「星球 + 轨道环」为母题，做成一个会呼吸的星核：
+     · 内核是一颗缓慢明灭 pulsating 的星球
+     · 两条倾斜轨道环以不同速度反向旋转 orbit
+     · 环上有一颗小卫星沿轨道滑行
+   表现「正在思考」，但不展示思考文字本身。
+   ============================================================ */
+
+.lumen-think{
+  display:inline-flex;align-items:center;gap:8px;
+  vertical-align:middle;user-select:none;
+}
+
+/* ---- 动效主体 ---- */
+.lumen-think .lt-core{
+  position:relative;width:26px;height:26px;flex:none;
+}
+.lumen-think .lt-star{
+  position:absolute;left:50%;top:50%;
+  width:11px;height:11px;margin:-5.5px 0 0 -5.5px;
+  border-radius:50%;
+  background:radial-gradient(circle at 34% 30%,#BFF4F7 0%,#5ED6E2 42%,#1B6F80 100%);
+  box-shadow:0 0 10px rgba(94,214,226,.75),0 0 22px rgba(94,214,226,.32);
+  animation:lt-breathe 2.4s cubic-bezier(.45,0,.55,1) infinite;
+}
+.lumen-think .lt-ring{
+  position:absolute;left:50%;top:50%;
+  border-radius:50%;
+  border:1.4px solid rgba(94,214,226,.5);
+  transform-origin:50% 50%;
+}
+/* 环的倾斜用 rotate3d 造成透视感 */
+.lumen-think .lt-ring.a{
+  width:26px;height:9px;margin:-4.5px 0 0 -13px;
+  transform:rotate(-22deg);
+  animation:lt-orbit-a 3.6s linear infinite;
+}
+.lumen-think .lt-ring.b{
+  width:22px;height:7px;margin:-3.5px 0 0 -11px;
+  border-color:rgba(94,214,226,.3);
+  transform:rotate(31deg);
+  animation:lt-orbit-b 5.2s linear infinite;
+}
+/* 卫星 */
+.lumen-think .lt-sat{
+  position:absolute;left:50%;top:50%;
+  width:4px;height:4px;margin:-2px 0 0 -2px;
+  border-radius:50%;background:#9FF0F6;
+  box-shadow:0 0 7px rgba(159,240,246,.9);
+  animation:lt-sat 3.6s linear infinite;
+}
+
+@keyframes lt-breathe{
+  0%,100%{transform:scale(.86);opacity:.62;box-shadow:0 0 7px rgba(94,214,226,.5),0 0 15px rgba(94,214,226,.2)}
+  50%    {transform:scale(1.1);opacity:1;  box-shadow:0 0 13px rgba(94,214,226,.9),0 0 28px rgba(94,214,226,.4)}
+}
+@keyframes lt-orbit-a{
+  0%  {transform:rotate(-22deg) rotate(0deg)}
+  100%{transform:rotate(-22deg) rotate(360deg)}
+}
+@keyframes lt-orbit-b{
+  0%  {transform:rotate(31deg) rotate(0deg)}
+  100%{transform:rotate(31deg) rotate(-360deg)}
+}
+@keyframes lt-sat{
+  0%  {transform:rotate(0deg) translateX(13px) rotate(0deg)}
+  100%{transform:rotate(360deg) translateX(13px) rotate(-360deg)}
+}
+
+/* ---- 文案 ---- */
+.lumen-think .lt-txt{
+  font-size:12.5px;color:var(--txt-3);letter-spacing:.02em;
+  animation:lt-fade 2.4s ease-in-out infinite;
+}
+@keyframes lt-fade{0%,100%{opacity:.55}50%{opacity:1}}
+
+/* 思考结束后展示的折叠区域 */
+.reason-box{
+  font-size:12px;color:var(--txt-3);border-left:2px solid rgba(94,214,226,.3);
+  padding:2px 0 2px 10px;margin:0 0 8px;line-height:1.65;
+}
+.reason-box .reason-head{
+  cursor:pointer;display:flex;align-items:center;gap:6px;
+  font-size:11px;letter-spacing:.06em;opacity:.75;user-select:none;
+}
+.reason-box .reason-head:hover{opacity:1;color:var(--txt-2)}
+.reason-box .reason-caret{
+  display:inline-block;width:0;height:0;
+  border-left:4px solid currentColor;border-top:3.5px solid transparent;
+  border-bottom:3.5px solid transparent;transition:transform .18s ease;
+}
+.reason-box.open .reason-caret{transform:rotate(90deg)}
+.reason-box .reason-text{
+  margin-top:6px;white-space:pre-wrap;max-height:280px;overflow:auto;
+  padding-bottom:4px;
+}
+.reason-box:not(.open) .reason-text{display:none}
+
+/* 移动端尺寸略小 */
+@media (max-width:520px){
+  .lumen-think .lt-core{width:22px;height:22px}
+  .lumen-think .lt-star{width:9px;height:9px;margin:-4.5px 0 0 -4.5px}
+  .lumen-think .lt-ring.a{width:22px;height:8px;margin:-4px 0 0 -11px}
+  .lumen-think .lt-ring.b{width:18px;height:6px;margin:-3px 0 0 -9px}
+  .lumen-think .lt-txt{font-size:11.5px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .lumen-think .lt-star,
+  .lumen-think .lt-ring,
+  .lumen-think .lt-sat,
+  .lumen-think .lt-txt{animation:none}
+}
+
+/* ===== 远控画面（网易 UU 式：画面 + 可调分辨率） ===== */
+.viewwrap{position:relative;width:100%;border-radius:16px;overflow:hidden;
+  background:#07090C;border:1px solid var(--line);margin-bottom:10px;
+  display:grid;place-items:center;min-height:180px;aspect-ratio:16/9}
+.viewwrap img{width:100%;height:100%;object-fit:contain;display:block;
+  opacity:0;transition:opacity .18s ease;-webkit-user-drag:none;user-select:none}
+.viewwrap.live img{opacity:1}
+.viewhint{position:absolute;inset:0;display:grid;place-content:center;text-align:center;
+  color:var(--txt3);font-size:13px;pointer-events:none;line-height:1.7}
+.viewwrap.live .viewhint{display:none}
+.cursor{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;
+  border:2px solid rgba(95,211,182,.95);box-shadow:0 0 8px rgba(95,211,182,.7);
+  pointer-events:none;opacity:0;transition:opacity .2s ease;left:0;top:0}
+.cursor.on{opacity:1}
+.rowline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 4px}
+.sel{background:rgba(255,255,255,.05);border:1px solid var(--line2);color:var(--txt);
+  border-radius:10px;padding:8px 10px;font-size:13px;font-family:inherit;max-width:62%}
+</style>
+</head>
+<body>
+
+<div class="screen" id="login">
+  <div class="login-card">
+    <div class="mark">L</div>
+    <h1>连接你的电脑</h1>
+    <p class="sub">同一账号 · 局域网直连 · 不经过第三方服务器</p>
+    <div class="seg">
+      <button class="on" data-m="pwd">账号密码</button>
+      <button data-m="code">配对码</button>
+    </div>
+    <div id="formPwd">
+      <input class="inp" id="u" placeholder="账号" autocomplete="username">
+      <input class="inp" id="p" type="password" placeholder="密码" autocomplete="current-password">
+    </div>
+    <div id="formCode" style="display:none">
+      <input class="inp" id="code" inputmode="numeric" placeholder="电脑端「手机」面板里的 6 位配对码">
+    </div>
+    <input class="inp" id="dn" placeholder="给这台手机起个名字（可留空）" value="">
+    <button class="btn" id="btnLogin">连接</button>
+    <div class="err" id="err"></div>
+  </div>
+</div>
+
+<div class="screen" id="main">
+  <div class="top">
+    <div class="ttl"><b id="devName">Lumen</b><span id="connState">连接中…</span></div>
+    <button class="icon" id="btnRefresh" title="刷新">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0115-6.7L21 8M21 21v-5h-5M21 12a9 9 0 01-15 6.7L3 16"/></svg>
+    </button>
+  </div>
+
+  <div class="body">
+    <!-- 会话列表 -->
+    <div class="pane on" id="paneSessions">
+      <div class="sect">这台电脑上的会话</div>
+      <div id="sessList"></div>
+    </div>
+
+    <!-- 对话 -->
+    <div class="pane" id="paneChat">
+      <div id="chatBody"></div>
+      <div class="composer">
+        <textarea id="cinput" rows="1" placeholder="给它发消息…"></textarea>
+        <button class="send" id="btnSend"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 8 6 8z"/></svg></button>
+      </div>
+    </div>
+
+    <!-- 远控 -->
+    <div class="pane" id="paneRemote">
+      <div class="sect">远程控制</div>
+      <div class="viewwrap" id="viewWrap">
+        <img id="viewImg" alt="电脑画面">
+        <div class="viewhint" id="viewHint">未授权<br><span style="font-size:11px">点下方「申请远控」，电脑端确认后可用</span></div>
+        <div class="cursor" id="viewCursor"></div>
+      </div>
+      <div class="rowline">
+        <span class="klabel" style="margin:0">画面分辨率</span>
+        <select id="viewMode" class="sel">
+          <option value="auto">自适应（贴合手机）</option>
+          <option value="480">480p 最省流量</option>
+          <option value="720">720p</option>
+          <option value="1080">1080p 推荐</option>
+          <option value="1440">1440p 高清</option>
+          <option value="native">原始分辨率</option>
+        </select>
+      </div>
+      <div class="note" id="viewInfo" style="margin:6px 0 10px">—</div>
+      <div class="pad" id="pad">
+        <div class="hint" id="padHint">未授权<br><span style="font-size:11px">点下方「申请远控」，电脑端确认后可用</span></div>
+        <div class="dotp" id="dotp"></div>
+      </div>
+      <div class="btns">
+        <button class="k" data-cmd="click" data-b="left"><svg viewBox="0 0 24 24"><path d="M5 3l14 9-6 1.6L10 20z"/></svg>左键</button>
+        <button class="k" data-cmd="dbl"><svg viewBox="0 0 24 24"><path d="M5 3l14 9-6 1.6L10 20z"/><path d="M9 12l9 6"/></svg>双击</button>
+        <button class="k" data-cmd="click" data-b="right"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>右键</button>
+      </div>
+      <div class="krow">
+        <button data-cmd="wheel" data-d="120">↑ 上滚</button>
+        <button data-cmd="wheel" data-d="-120">↓ 下滚</button>
+        <button data-cmd="key" data-v="enter">回车</button>
+      </div>
+      <div class="krow" style="display:none">
+        <textarea id="kb" placeholder="键盘输入…"></textarea>
+      </div>
+      <div class="klabel">键盘输入</div>
+      <div class="composer" style="padding:0;border:0;background:none">
+        <textarea id="kbin" rows="1" placeholder="输入文字后点发送，会直接打进电脑"></textarea>
+        <button class="send" id="btnKb"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 8 6 8z"/></svg></button>
+      </div>
+      <div class="hr"></div>
+      <button class="btn ghost" id="btnReqRemote">申请远控</button>
+      <button class="btn ghost" id="btnStopRemote" style="margin-top:8px;color:var(--red)">断开远控</button>
+      <div class="note" style="margin-top:10px">光标按「目标坐标 + 速度参数」平滑插值，不是点哪瞬移哪。每次远控都需要电脑端弹窗授权。</div>
+    </div>
+
+    <!-- 设备 -->
+    <div class="pane" id="paneDevice">
+      <div class="sect">当前设备</div>
+      <div id="devList"></div>
+      <div class="sect">关于</div>
+      <div class="card">
+        <div class="note">Lumen 手机端只做三件事：发现你的电脑、看它的会话、在授权后控制它。
+        所有数据都在你自己的局域网 / 虚拟内网里流动。</div>
+      </div>
+      <button class="btn ghost" id="btnLogout" style="margin-top:8px">退出登录</button>
+    </div>
+  </div>
+
+  <div class="tabbar">
+    <button class="on" data-tab="Sessions"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>会话</button>
+    <button data-tab="Remote"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18.5h2"/></svg>远控</button>
+    <button data-tab="Device"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8"/></svg>设备</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+var BOOT = JSON.parse(document.getElementById('lumen-boot') ? '{}' : '{}');
+var TOK = localStorage.getItem('lumen_tok') || '';
+var $ = function(s){return document.querySelector(s)};
+var esc = function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])})};
+var S = {sessions:[], cur:null, msgs:[], authorized:false, sid:null, dragging:false};
+
+function toast(m){var t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('on')},1800)}
+
+function api(path, body){
+  var h = {'Content-Type':'application/json'};
+  if (TOK) h['Authorization'] = 'Bearer ' + TOK;
+  return fetch(path, {method: body===undefined?'GET':'POST', headers:h, body: body===undefined?undefined:JSON.stringify(body)})
+    .then(function(r){
+      return r.text().then(function(t){
+        var d; try{d=JSON.parse(t)}catch(e){d={error:t}}
+        if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+        return d;
+      });
+    });
+}
+
+/* ---------------- 登录 ---------------- */
+var mode='pwd';
+document.querySelectorAll('.seg button').forEach(function(b){
+  b.onclick=function(){
+    mode=b.dataset.m;
+    document.querySelectorAll('.seg button').forEach(function(x){x.classList.toggle('on',x===b)});
+    $('#formPwd').style.display = mode==='pwd'?'block':'none';
+    $('#formCode').style.display = mode==='code'?'block':'none';
+  };
+});
+$('#btnLogin').onclick=function(){
+  var body = {device_name: $('#dn').value || '手机'};
+  if(mode==='pwd'){ body.username=$('#u').value.trim(); body.password=$('#p').value; }
+  else { body.code=$('#code').value.trim(); }
+  api(mode==='pwd'?'/api/login':'/api/pair', body).then(function(r){
+    TOK = r.token; localStorage.setItem('lumen_tok', TOK);
+    syncNativeToken();
+    enter(r.account);
+  }).catch(function(e){ $('#err').textContent = e.message; });
+};
+
+// 装成原生 APP 时，把令牌同步给安卓侧 —— WebView 的 localStorage 原生读不到，
+// 而后台推送轮询需要这个令牌。浏览器里没有这个接口，自动跳过。
+function syncNativeToken(){
+  try{
+    if(window.LumenNative && LumenNative.syncToken) LumenNative.syncToken(TOK||'');
+  }catch(e){}
+}
+
+function enter(acc){
+  $('#login').style.display='none';
+  $('#main').classList.add('on');
+  if(acc){ $('#devName').textContent = acc.device_name || 'Lumen'; $('#connState').textContent = acc.host_os || ''; }
+  loadSessions();
+  setInterval(function(){ api('/api/remote/status').then(function(st){
+    var was = S.authorized;
+    S.authorized = !!st.session; S.sid = st.session?st.session.id:null;
+    $('#pad').classList.toggle('live', S.authorized);
+    $('#padHint').textContent = S.authorized ? '已授权 · 在此拖动控制光标' : '未授权 · 点下方申请远控';
+    if(!S.authorized) $('#padHint').innerHTML='未授权<br><span style="font-size:11px">点下方「申请远控」，电脑端确认后可用</span>';
+    // 画面跟随授权状态启停
+    if(S.authorized && !was) viewStart();
+    if(!S.authorized && was){ viewStop(); $('#viewWrap').classList.remove('live'); $('#viewCursor').classList.remove('on'); }
+    if(S.authorized){
+      viewInfo(st.view);
+      // 用电脑端返回的光标位置，在画面上标出来
+      if(st.cursor && st.view && st.view.frame && st.view.frame.w){
+        var sc = st.view.screen||{};
+        var fw = st.view.frame.w, fh = st.view.frame.h;
+        if(sc.w && sc.h){
+          showCursor((st.cursor[0]-0)/(sc.w||1), (st.cursor[1]-0)/(sc.h||1));
+        }
+      }
+    }
+  }).catch(function(){}); }, 2500);
+}
+
+/* ---------------- tabs ---------------- */
+document.querySelectorAll('.tabbar button').forEach(function(b){
+  b.onclick=function(){
+    document.querySelectorAll('.tabbar button').forEach(function(x){x.classList.toggle('on',x===b)});
+    document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('on')});
+    $('#pane'+b.dataset.tab).classList.add('on');
+    if(b.dataset.tab==='Device') loadDevices();
+  };
+});
+
+/* ---------------- 会话 ---------------- */
+function loadSessions(){
+  api('/api/sessions').then(function(r){
+    S.sessions = r.sessions||[];
+    $('#sessList').innerHTML = S.sessions.length ? S.sessions.map(function(s){
+      return '<div class="card" data-sid="'+s.id+'"><div class="row"><div class="g"><b>'+esc(s.title||'新对话')+'</b>'+
+        '<span>'+new Date(s.updated*1000).toLocaleString('zh-CN')+' · '+(s.msg_count||0)+' 条</span></div>'+
+        '<span class="pill gold">打开</span></div></div>';
+    }).join('') : '<div class="note">这台电脑上还没有会话。</div>';
+  }).catch(function(e){ $('#connState').textContent = '离线：'+e.message; });
+}
+$('#sessList').onclick=function(e){
+  var c=e.target.closest('[data-sid]'); if(!c) return;
+  api('/api/session?id='+encodeURIComponent(c.dataset.sid)).then(function(s){
+    S.cur=s.id;
+    S.msgs=(s.messages||[]).map(function(m){return {role:m.role,content:m.content,meta:m.meta||{}}});
+    renderChat();
+    document.querySelectorAll('.tabbar button').forEach(function(x){x.classList.toggle('on',x.dataset.tab==='Sessions')});
+    $('#paneSessions').classList.remove('on'); $('#paneChat').classList.add('on');
+  });
+};
+
+function inlineMD(t){
+  t = esc(t);
+  t = t.replace(/```([\s\S]*?)```/g, function(m,c){return '</p><pre>'+c.replace(/^\w*\n/,'')+'</pre><p>'});
+  t = t.replace(/`([^`]+)`/g,'<code>$1</code>');
+  t = t.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  t = t.replace(/\n/g,'<br>');
+  return '<p>'+t+'</p>';
+}
+
+/* 思考动效标记：原创「星核」——呼吸的星球 + 两条反向旋转的轨道环 */
+var THINK_MARKUP = '<span class="lumen-think"><span class="lt-core">'
+  + '<i class="lt-ring a"></i><i class="lt-ring b"></i>'
+  + '<i class="lt-star"></i><i class="lt-sat"></i></span>'
+  + '<span class="lt-txt">思考中</span></span>';
+
+function renderChat(){
+  $('#chatBody').innerHTML = S.msgs.map(function(m){
+    var src = (m.meta&&m.meta.sources&&m.meta.sources.length) ? '<div class="src">引用：'+
+      m.meta.sources.map(function(x,i){return '<a href="'+esc(x.url)+'" target="_blank">['+(i+1)+'] '+esc(x.title)+'</a>'}).join('')+'</div>' : '';
+    // 思考动效：思考中显示可动图标，结束后折叠为可展开的思考过程
+    var think = '';
+    if(m.meta&&m.meta.thinking) think = THINK_MARKUP;
+    else if(m.meta&&m.meta.reasoning) think = '<div class="reason-box"><div class="reason-head"><i class="reason-caret"></i>思考过程</div><div class="reason-text">'+esc(m.meta.reasoning)+'</div></div>';
+    return '<div class="msg '+(m.role==='user'?'me':'ai')+'"><div class="bub">'+think+inlineMD(m.content)+src+'</div></div>';
+  }).join('');
+  // 思考折叠区可点开
+  Array.prototype.forEach.call(document.querySelectorAll('#chatBody .reason-head'),function(h){
+    h.addEventListener('click',function(){
+      var b=h.parentElement; if(b) b.classList.toggle('open');
+    });
+  });
+  var b=$('#paneChat'); if(b) b.scrollTop=b.scrollHeight;
+  document.querySelector('.body').scrollTop = 99999;
+}
+
+$('#btnSend').onclick=function(){
+  var t=$('#cinput').value.trim(); if(!t||!S.cur) return;
+  $('#cinput').value='';
+  S.msgs.push({role:'user',content:t,meta:{}});
+  var ai={role:'assistant',content:'',meta:{}}; S.msgs.push(ai);
+  renderChat();
+  var h={'Content-Type':'application/json'}; if(TOK) h['Authorization']='Bearer '+TOK;
+  fetch('/api/chat',{method:'POST',headers:h,body:JSON.stringify({session_id:S.cur,message:t})}).then(function(res){
+    var rd=res.body.getReader(), dec=new TextDecoder(), acc='', buf='';
+    function pump(){
+      rd.read().then(function(o){
+        if(o.done){ ai.content=buf; renderChat(); return; }
+        acc += dec.decode(o.value,{stream:true});
+        var i;
+        while((i=acc.indexOf('\n\n'))>=0){
+          var ch=acc.slice(0,i); acc=acc.slice(i+2);
+          var line=ch.split('\n').filter(function(l){return l.indexOf('data: ')==0})[0];
+          if(!line) continue;
+          var ev; try{ev=JSON.parse(line.slice(6))}catch(e){continue}
+          if(ev.type==='token'){ buf+=ev.text; ai.content=buf; renderChat(); }
+          else if(ev.type==='sources'){ ai.meta.sources=ev.sources; }
+          else if(ev.type==='thinking'){
+            if(ev.state==='start'){ ai.meta.thinking=true; renderChat(); }
+            else { ai.meta.thinking=false; ai.meta.reasoning=ev.text||''; renderChat(); }
+          }
+          else if(ev.type==='status'){ ai.content=buf+'\\n\\n_'+ev.text+'_'; renderChat(); }
+        }
+        pump();
+      });
+    }
+    pump();
+  }).catch(function(e){ toast('发送失败：'+e.message); });
+};
+
+
+/* ============================================================
+   远控画面：轮询拉帧 + 点击映射 + 分辨率切换
+   ============================================================ */
+var viewState = { timer:null, fps:0, frames:0, mark:Date.now(), lastInfo:'' };
+
+function viewClientSize(){
+  var w = window.innerWidth || 390;
+  var h = window.innerHeight || 844;
+  // 用 CSS 像素（去掉设备像素比），和「自适应」策略一致
+  return { w: Math.round(w), h: Math.round(h) };
+}
+
+function viewUrl(){
+  var c = viewClientSize();
+  var m = ($('#viewMode')||{}).value || 'auto';
+  // <img> 不能带 Authorization 头，用当前远控会话 ID 作为凭证（断开即失效）
+  return '/api/remote/frame?mode='+encodeURIComponent(m)
+    + '&cw='+c.w+'&ch='+c.h
+    + '&sid='+encodeURIComponent(S.sid||'')
+    + '&t='+Date.now();
+}
+
+function viewStart(){
+  viewStop();
+  var img = $('#viewImg');
+  if(!img) return;
+  img.onload = function(){
+    $('#viewWrap').classList.add('live');
+    viewState.frames++;
+    var el = (Date.now()-viewState.mark)/1000;
+    if(el>=1){ viewState.fps = Math.round(viewState.frames/el); viewState.frames=0; viewState.mark=Date.now(); }
+  };
+  img.onerror = function(){ $('#viewWrap').classList.remove('live'); };
+  var tick = function(){
+    if(!S.authorized){ viewStop(); return; }
+    img.src = viewUrl();
+    viewState.timer = setTimeout(tick, 40);
+  };
+  tick();
+}
+
+function viewStop(){
+  if(viewState.timer){ clearTimeout(viewState.timer); viewState.timer=null; }
+  var img = $('#viewImg'); if(img) img.onload=null;
+}
+
+function viewInfo(st){
+  var el = $('#viewInfo'); if(!el || !st) return;
+  var t = st.target||{}, s = st.screen||{}, f = st.frame||{};
+  var txt = '电脑 ' + s.w + '×' + s.h + ' → 远控画面 ' + t.w + '×' + t.h;
+  if(st.fps) txt += ' · ' + st.fps + ' fps';
+  if(viewState.fps) txt += '（手机端 ' + viewState.fps + ' fps）';
+  el.textContent = txt;
+}
+
+function viewRefreshStatus(){
+  api('/api/remote/status').then(function(st){
+    viewInfo(st.view);
+    if(st.view && st.view.mode && $('#viewMode')) $('#viewMode').value = st.view.mode;
+  }).catch(function(){});
+}
+
+/* 点画面 → 映射到电脑真实坐标 */
+function viewTap(e){
+  if(!S.authorized){ toast('还没有授权'); return; }
+  var img = $('#viewImg'); if(!img) return;
+  var r = img.getBoundingClientRect();
+  // object-fit:contain，画面可能有黑边，要按实际内容区域换算
+  var nat = { w: img.naturalWidth||1, h: img.naturalHeight||1 };
+  var scale = Math.min(r.width/nat.w, r.height/nat.h);
+  var dw = nat.w*scale, dh = nat.h*scale;
+  var ox = r.left + (r.width-dw)/2, oy = r.top + (r.height-dh)/2;
+  var x = (e.clientX-ox)/dw, y = (e.clientY-oy)/dh;
+  if(x<0||x>1||y<0||y>1) return;
+  api('/api/remote/tap',{ x:x, y:y, button:'left', double:false }).catch(function(){});
+  showCursor(x,y);
+}
+
+function showCursor(x,y){
+  var c = $('#viewCursor'); if(!c) return;
+  c.style.left = (x*100)+'%';
+  c.style.top = (y*100)+'%';
+  c.classList.add('on');
+}
+
+(function(){
+  var img = $('#viewImg');
+  if(img){
+    img.addEventListener('click', viewTap);
+    img.addEventListener('touchend', function(e){
+      if(e.changedTouches && e.changedTouches.length){
+        var t = e.changedTouches[0];
+        viewTap({ clientX:t.clientX, clientY:t.clientY });
+      }
+    }, { passive:true });
+  }
+  var sel = $('#viewMode');
+  if(sel){
+    sel.addEventListener('change', function(){
+      var c = viewClientSize();
+      api('/api/remote/view',{ mode:sel.value, cw:c.w, ch:c.h }).then(function(st){
+        viewInfo(st);
+        toast('画面分辨率已切换');
+      }).catch(function(e){ toast('切换失败：'+e.message,'err'); });
+    });
+  }
+})();
+
+/* ---------------- 远控 ---------------- */
+$('#btnReqRemote').onclick=function(){
+  api('/api/remote/request',{device: ($('#dn').value||'手机')}).then(function(r){
+    toast('已发送请求，请在电脑上点「允许」');
+    var n=0, iv=setInterval(function(){
+      n++; if(n>40){clearInterval(iv);return}
+      api('/api/remote/status').then(function(st){
+        if(st.session){ clearInterval(iv); S.authorized=true; S.sid=st.session.id;
+          $('#pad').classList.add('live'); $('#padHint').textContent='已授权 · 在此拖动控制光标';
+          viewStart(); viewRefreshStatus();
+          toast('已授权，开始控制'); }
+      }).catch(function(){});
+    },1500);
+  }).catch(function(e){ toast(e.message); });
+};
+$('#btnStopRemote').onclick=function(){
+  api('/api/remote/stop',{by:'mobile'}).then(function(){ S.authorized=false;
+    $('#pad').classList.remove('live');
+    $('#viewWrap').classList.remove('live');
+    $('#viewCursor').classList.remove('on');
+    viewStop();
+    $('#padHint').innerHTML='未授权<br><span style="font-size:11px">点下方「申请远控」，电脑端确认后可用</span>';
+    toast('已断开'); });
+};
+
+var pad=$('#pad'), dot=$('#dotp'), lastSent=0;
+function sendMove(ev){
+  if(!S.authorized) return;
+  var r=pad.getBoundingClientRect();
+  var x=Math.min(1,Math.max(0,(ev.clientX-r.left)/r.width));
+  var y=Math.min(1,Math.max(0,(ev.clientY-r.top)/r.height));
+  dot.style.left=(x*100)+'%'; dot.style.top=(y*100)+'%';
+  var now=Date.now(); if(now-lastSent<24) return; lastSent=now;
+  api('/api/remote/input',{type:'move',x:x,y:y,speed:0.85}).catch(function(){});
+}
+pad.addEventListener('pointerdown',function(e){ if(!S.authorized){toast('还没有授权');return} pad.setPointerCapture(e.pointerId); pad.classList.add('touch'); S.dragging=true; sendMove(e); });
+pad.addEventListener('pointermove',function(e){ if(!S.dragging) return; sendMove(e); });
+pad.addEventListener('pointerup',function(e){ S.dragging=false; if(!S.authorized) return;
+  var r=pad.getBoundingClientRect();
+  api('/api/remote/input',{type:'click',button:'left',x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height}).catch(function(){});
+});
+document.querySelectorAll('.k[data-cmd]').forEach(function(b){
+  b.onclick=function(){
+    if(!S.authorized){toast('还没有授权');return}
+    var c=b.dataset.cmd;
+    if(c==='click') api('/api/remote/input',{type:'click',button:b.dataset.b||'left'}).catch(function(){});
+    if(c==='dbl') api('/api/remote/input',{type:'click',button:'left',double:true}).catch(function(){});
+    if(c==='wheel') api('/api/remote/input',{type:'wheel',delta:+b.dataset.d}).catch(function(){});
+    if(c==='key') api('/api/remote/input',{type:'key',name:b.dataset.v}).catch(function(){});
+  };
+});
+$('#btnKb').onclick=function(){
+  if(!S.authorized){toast('还没有授权');return}
+  var v=$('#kbin').value; if(!v) return;
+  api('/api/remote/input',{type:'text',value:v}).then(function(){$('#kbin').value=''}).catch(function(e){toast(e.message)});
+};
+
+/* ---------------- 设备 ---------------- */
+function loadDevices(){
+  api('/api/devices').then(function(r){
+    var self=r.self||{};
+    $('#devList').innerHTML='<div class="card"><div class="row"><div class="g"><b>'+esc(self.device_name||'这台电脑')+
+      '</b><span>'+esc(self.host_os||'')+' · 账号 '+esc(self.username||'')+'</span></div><span class="pill ok">在线</span></div></div>'+
+      '<div class="note" style="margin-top:8px">同一账号的手机都会出现在这里。远控需要电脑端逐次授权。</div>';
+  }).catch(function(e){ $('#devList').innerHTML='<div class="note">'+esc(e.message)+'</div>'; });
+}
+$('#btnLogout').onclick=function(){ localStorage.removeItem('lumen_tok'); try{if(window.LumenNative&&LumenNative.syncToken)LumenNative.syncToken('');}catch(e){} location.reload(); };
+$('#btnRefresh').onclick=function(){ loadSessions(); toast('已刷新'); };
+
+/* 自动登录 */
+if(TOK){ api('/api/devices').then(function(r){ syncNativeToken(); enter(r.self); }).catch(function(){ localStorage.removeItem('lumen_tok'); }); }
+})();
+</script>
+</body>
+</html>

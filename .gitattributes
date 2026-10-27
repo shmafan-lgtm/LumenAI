@@ -1,0 +1,17 @@
+# 默认按文本处理，仓库里统一存 LF，检出时按平台转换
+* text=auto eol=lf
+
+# 二进制文件不做任何转换
+*.gguf binary
+*.zip binary
+*.ico binary
+*.png binary
+*.jpg binary
+*.jar binary
+*.apk binary
+*.exe binary
+*.dll binary
+
+# Windows 批处理必须是 CRLF，否则在 cmd 里会出问题
+*.bat text eol=crlf
+*.cmd text eol=crlf

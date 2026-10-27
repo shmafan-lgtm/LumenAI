@@ -1,0 +1,18 @@
+{
+  "_说明": "Lumen 智能搜索配置。改这里后重启 Lumen 生效；也可以在界面「设置 → 智能搜索」里改。",
+  "enabled": true,
+  "mode": "low_confidence",
+  "mode_options": {
+    "low_confidence": "仅当模型自评置信度低于阈值、或明确要求检索时才联网",
+    "always": "每一轮都先检索再回答，适合查资料场景"
+  },
+  "threshold": 60,
+  "searxng_url": "",
+  "_searxng": "自建 SearXNG 时填 http://127.0.0.1:8888 ，需在 settings.yml 里开启 json 格式输出。留空则用必应 RSS 兜底。",
+  "providers": ["searxng", "bing", "bing-html", "baidu", "sogou", "duckduckgo"],
+  "max_results": 6,
+  "cache_hours": 24,
+  "fetch_pages": true,
+  "fetch_top_n": 2,
+  "offline_hint": "当前无法联网，以下为模型记忆回答"
+}

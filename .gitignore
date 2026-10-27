@@ -1,0 +1,59 @@
+# ---- 模型权重：体积巨大，不入库 ----
+# 首次启动时由 core/weights.py 从镜像仓库按档位按需下载（见 README 第 5 节）
+models/*.gguf
+models/*.bin
+models/*.safetensors
+models/*.onnx
+models/*.ort
+models/*.xml
+
+# ---- llama.cpp 运行时：仓库里只留压缩包 ----
+# CI 打包前会解压到 runtime/llamacpp/，本地同理
+runtime/llamacpp/
+
+# ---- 运行时数据（每个用户本地生成）----
+data/
+logs/
+workspace/
+*.db
+*.db-journal
+*.db-wal
+*.log
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---- PyInstaller ----
+# 所有 PyInstaller 中间目录（build / buildguard / build_v4 / build_inst ...）
+build*/
+dist*/
+release/
+_build/
+*.spec.bak
+
+# ---- 打包工具临时文件 ----
+installer/_*.spec
+
+# ---- Android ----
+app/.gradle/
+app/build/
+app/app/build/
+app/local.properties
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+
+# ---- 前端临时产物 ----
+web/assets/_verify_*.html
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

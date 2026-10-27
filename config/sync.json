@@ -1,0 +1,36 @@
+{
+  "_说明": "手机端与电脑端的发现/同步/远控配置。全部走局域网或免费虚拟内网，不依赖付费公网服务器。",
+  "transport": {
+    "lan_http": true,
+    "port": 8770,
+    "bind": "0.0.0.0",
+    "require_token": true
+  },
+  "discovery": {
+    "method": "lan_ip_display",
+    "_note": "手机浏览器无法做 UDP 广播，所以由电脑端展示 http://<局域网IP>:8770/m ，手机直接打开。跨网段时用 ZeroTier / Tailscale 免费层组成虚拟内网，效果相同。"
+  },
+  "sync": {
+    "incremental": true,
+    "endpoint": "/api/sync?seq=<last_seq>",
+    "poll_seconds": 3
+  },
+  "remote_control": {
+    "enabled": true,
+    "require_desktop_approval": true,
+    "require_pair_code": true,
+    "cursor_hz": 60,
+    "max_speed_px_s": 2600,
+    "accel_px_s2": 9000,
+    "stop_hotkey": "Esc（在电脑端关闭授权弹窗或点「断开」）",
+    "_note": "手机只发「目标坐标 + 速度」，电脑端按 60Hz 插值，带最大速度与加速度限制，不是点哪瞬移哪。"
+  },
+  "pair_code": {
+    "length": 6,
+    "ttl_seconds": 300
+  },
+  "tunnel": {
+    "cloudflare_quick_tunnel": "仅用于临时测试，URL 每次都会变，不建议作为长期唯一方案",
+    "recommended": "ZeroTier / Tailscale 免费层或自建 RustDesk 中继"
+  }
+}

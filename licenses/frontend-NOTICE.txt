@@ -1,0 +1,63 @@
+============================================================
+Lumen 前端第三方组件 — 许可与来源声明（NOTICE）
+============================================================
+
+本文件声明 Lumen 桌面前端所使用的第三方开源组件。
+禁止删除本文件。
+
+------------------------------------------------------------
+一、qrcode-generator
+------------------------------------------------------------
+用途：生成「手机扫码直连电脑」的局域网二维码。
+文件：web/assets/qrcode.js
+上游项目：qrcode-generator（Kazuhiko Arase）
+版本：1.4.4
+许可证：MIT License
+获取渠道：npm registry（qrcode-generator@1.4.4）
+
+原始版权声明：
+
+    //---------------------------------------------------------------------
+    //
+    // QR Code Generator for JavaScript
+    //
+    // Copyright (c) 2009 Kazuhiko Arase
+    //
+    // URL: http://www.d-project.com/
+    //
+    // Licensed under the MIT license:
+    //  http://www.opensource.org/licenses/mit-license.php
+    //
+    // The word 'QR Code' is registered trademark of
+    // DENSO WAVE INCORPORATED.
+    //---------------------------------------------------------------------
+    //
+
+MIT License 全文：
+
+    Permission is hereby granted, free of charge, to any person obtaining
+    a copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to
+    permit persons to whom the Software is furnished to do so, subject to
+    the following conditions:
+
+    The above copyright notice and this permission notice shall be
+    included in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+    LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+    OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+------------------------------------------------------------
+二、关于 Lumen 后端
+------------------------------------------------------------
+Lumen 的后端（core/ 目录）不使用任何第三方运行时依赖，
+全部基于 Python 标准库实现（http.server / sqlite3 / ctypes / json）。
+前端除上述 qrcode-generator 外，其余脚本（web/assets/app.js、
+web/assets/app.js 配套样式、web/mobile.html）均为 Lumen 原创。

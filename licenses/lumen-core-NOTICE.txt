@@ -1,0 +1,92 @@
+============================================================
+Lumen Core 3B — 第三方许可与来源声明（NOTICE）
+============================================================
+
+本档位是 Lumen 内置的兜底模型：不装 Ollama、没有专属权重时，
+Lumen 也能在本机 GPU 上真正跑起来，而不是给你一个空壳界面。
+禁止删除本文件。
+
+由「是想念也是麻烦」打包进 Lumen 安装目录。
+
+------------------------------------------------------------
+一、来源
+------------------------------------------------------------
+模型文件：Qwen2.5-3B-Instruct-Q4_K_M.gguf
+上游项目：Qwen/Qwen2.5-3B-Instruct
+发布方：Alibaba Cloud（通义千问团队）
+许可证：Apache License, Version 2.0
+获取渠道：ModelScope（modelscope.cn）镜像仓库
+量化格式：GGUF / Q4_K_M
+
+------------------------------------------------------------
+二、量化与打包
+------------------------------------------------------------
+  · 量化方式：Q4_K_M（GGUF 官方量化产物，未二次训练）
+  · 本地化适配（目录结构、llama.cpp 启动参数、上下文裁剪、
+    硬件锁联动、Vulkan 卸载层数自动回退）由「是想念也是麻烦」完成
+  · 权重未做再训练（无 LoRA / 无微调）
+
+------------------------------------------------------------
+三、为什么要有这一档
+------------------------------------------------------------
+三档专属模型（V1 Ultra / H1 Turbo / mini se）都需要用户自备权重，
+首次安装时往往一个都没有。没有这一档，Lumen 打开就是空壳；
+有了这一档，第一次启动就能对话、能检索、能调工具。
+
+------------------------------------------------------------
+四、能力与边界（如实标注）
+------------------------------------------------------------
+  · 3B 参数，中文对话流畅，能做基础推理与工具调用
+  · 推理深度、代码能力明显弱于三档专属模型，不要用它评估 Lumen 的上限
+  · 在 RTX 5060 8GB 上通过 Vulkan 全量卸载，实测约 110 t/s
+  · 放入更强的 GGUF 后会自动让位给对应档位
+
+------------------------------------------------------------
+五、许可证原文
+------------------------------------------------------------
+Apache License, Version 2.0
+
+Copyright (c) 2024 Alibaba Cloud
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+------------------------------------------------------------
+六、第三方组件
+------------------------------------------------------------
+· llama.cpp（MIT License）— 推理运行时，内置于 runtime/llamacpp/
+    完整许可原文见该目录下的 LICENSE-LLVM-OpenMP 等许可文件
+  Copyright (c) 2023-2024 The ggml authors
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+· onnxruntime-genai（MIT）· onnxruntime（MIT）— 可选 CPU 后端，
+  未随包分发，由用户自行安装
+· Vulkan Loader（Apache-2.0）— 随 Windows 显卡驱动提供
+
+============================================================

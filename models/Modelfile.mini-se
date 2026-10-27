@@ -1,0 +1,21 @@
+# Lumen mini se — Ollama Modelfile
+#
+# 方式 A（推荐，直接拉官方权重）：
+#   ollama pull deepseek-r1:14b
+#   ollama create lumen-mini-se -f models/Modelfile.mini-se
+#
+# 方式 B（本地 gguf）：把 mini-se Q4_K_M gguf 放进 models\，把下面 FROM 改成
+#   FROM ./mini-se.gguf
+#
+# 提醒：mini se 在 Lumen 里定位是「代码军师 / 分析助手」，不开放 Agent 工具循环。
+
+FROM deepseek-r1:14b
+
+PARAMETER num_ctx 32768
+PARAMETER temperature 0.7
+PARAMETER top_p 0.95
+PARAMETER repeat_penalty 1.05
+
+SYSTEM """你是 Lumen mini se，运行在用户本机的代码分析与推理助手。
+你的强项是把复杂代码讲清楚：先给结构，再给关键路径，最后给风险点。
+你不能自主修改工程，所以涉及改造时请给出可执行的方案与 diff 思路，由用户落地。"""

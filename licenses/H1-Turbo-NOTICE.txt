@@ -1,0 +1,42 @@
+Lumen H1 Turbo — 第三方许可证声明（NOTICE）
+================================================================
+本文件为 Lumen H1 Turbo 档位随附的第三方许可证声明，属于合规必需文件，
+随软件一同分发。请勿删除、改名或移除本文件。
+
+Lumen H1 Turbo 的权重基于上游第三方开源模型构建，上游以 MIT 许可证发布。
+按 MIT 许可证要求，下列版权声明与许可声明必须随分发物保留。
+
+----------------------------------------------------------------
+MIT License
+----------------------------------------------------------------
+Copyright (c) 2025 the upstream model authors and contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+----------------------------------------------------------------
+补充说明
+----------------------------------------------------------------
+1. 本档位在 Lumen 主界面与「关于」页不展示原始来源，这是产品层面的展示约定，
+   不影响本文件所载许可证义务。
+2. 如果你从第三方渠道获取 H1-Turbo 权重，请把该渠道随附的 LICENSE / NOTICE
+   文件一并保留在 licenses/ 目录下。
+3. 量化文件为 Q4_K_M GGUF，由 Lumen 侧完成转换与打包；量化不改变上游许可证义务。
+4. 修改与打包：由「有事想念也是麻烦」完成。
+
+Lumen 本体、界面与工具链的著作权归其作者所有。

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="teal">#5ED6E2</color>
+    <color name="teal_dim">#1B6F80</color>
+    <color name="bg_dark">#0E1418</color>
+    <color name="bg_dark_2">#151D22</color>
+    <color name="txt_dark">#E6F2F4</color>
+    <color name="txt_dark_2">#8FA6AD</color>
+    <color name="bg_light">#F5F8F9</color>
+    <color name="bg_light_2">#FFFFFF</color>
+    <color name="txt_light">#16232A</color>
+    <color name="txt_light_2">#5A6B72</color>
+</resources>
