@@ -101,7 +101,11 @@ _PS_SCRIPT = (
     "$app = @();"
     "Get-NetFirewallRule | Where-Object { $_.Action -eq 'Allow' -and $_.DisplayName -like 'Lumen Desktop App' } | "
     "ForEach-Object { $app += $_.DisplayName };"
-    "[PSCustomObject]@{ allow=$allow; block=$block; app=$app } | ConvertTo-Json -Compress -Depth 4"
+    # 防火墙总开关：域 / 专用 / 公用 三个配置文件有没有任何一个是开的。
+    # 全关的时候根本不需要放行规则，也不该弹 UAC —— 否则白折腾用户一次。
+    "$fwOn = $false;"
+    "try { $fwOn = (@(Get-NetFirewallProfile | Where-Object { $_.Enabled -eq 'True' }).Count -gt 0) } catch { $fwOn = $true };"
+    "[PSCustomObject]@{ allow=$allow; block=$block; app=$app; fwOn=$fwOn } | ConvertTo-Json -Compress -Depth 4"
 )
 
 
@@ -126,10 +130,15 @@ def _powershell_status() -> dict | None:
             p = str(a.get("port", "")).strip()
             if p.isdigit():
                 allowed_ports.add(p)
+    fw_on = data.get("fwOn")
+    if isinstance(fw_on, str):
+        fw_on = fw_on.strip().lower() in ("true", "yes", "1")
     return {
         "allowed_ports": allowed_ports,
         "blocks": [str(b) for b in block],
         "app_rule": bool(app),
+        # 查不到时按「开着」处理（保守：宁可多写一条规则，也别漏放行）
+        "firewall_on": True if fw_on is None else bool(fw_on),
     }
 
 
@@ -268,12 +277,14 @@ def status(force: bool = False) -> dict:
     allowed_ports: set[str] = set()
     stale_blocks: list[str] = []
     has_app_rule = False
+    firewall_on = True
 
     ps = _powershell_status()
     if ps is not None:
         allowed_ports = ps["allowed_ports"]
         stale_blocks = ps["blocks"]
         has_app_rule = ps["app_rule"]
+        firewall_on = ps.get("firewall_on", True)
     else:
         # 回落：netsh（注意中文系统输出是 GBK）
         for r in _all_rules():
@@ -294,6 +305,12 @@ def status(force: bool = False) -> dict:
     guard_ok = str(p_guard) in allowed_ports
     blocked = bool(stale_blocks)
 
+    # 防火墙整个关掉时，端口本来就不拦人 —— 不用写规则，也不用弹 UAC。
+    if not firewall_on:
+        lan_ok = True
+        guard_ok = True
+        blocked = False
+
     out = {
         "ok": not blocked and lan_ok,
         "platform": "nt",
@@ -303,9 +320,10 @@ def status(force: bool = False) -> dict:
         "lan_allowed": lan_ok,
         "guard_allowed": guard_ok,
         "app_rule": has_app_rule,
+        "firewall_on": firewall_on,
         "exe": _exe_path(),
         "stale_blocks": stale_blocks,
-        "message": _message(lan_ok, guard_ok, blocked, stale_blocks),
+        "message": _message(lan_ok, guard_ok, blocked, stale_blocks, firewall_on),
     }
     _cache["ts"] = time.time()
     _cache["data"] = dict(out)
@@ -319,7 +337,10 @@ def status(force: bool = False) -> dict:
     return out
 
 
-def _message(lan_ok: bool, guard_ok: bool, blocked: bool, blocks: list[str]) -> str:
+def _message(lan_ok: bool, guard_ok: bool, blocked: bool, blocks: list[str],
+             firewall_on: bool = True) -> str:
+    if not firewall_on:
+        return "系统防火墙已关闭，局域网端口无需放行，手机端可以直接连"
     if blocked:
         return "存在 %d 条遗留的拦截规则（点过“取消”留下的），它们优先于放行规则，这就是“给了权限也没用”的原因" % len(blocks)
     if lan_ok and guard_ok:
@@ -386,7 +407,13 @@ def ensure(elevate: bool = True) -> dict:
 
     st = status(force=True)
     if st.get("ok"):
-        return {"ok": True, "changed": False, "message": "防火墙规则已就位，无需修改", "status": st}
+        # 防火墙整个关着时，ok 是因为「不需要放行」，别写成「规则已就位」
+        msg = st.get("message") or "防火墙规则已就位，无需修改"
+        if not st.get("firewall_on", True):
+            msg = st.get("message") or "系统防火墙已关闭，无需放行"
+        else:
+            msg = "防火墙规则已就位，无需修改"
+        return {"ok": True, "changed": False, "message": msg, "status": st}
 
     p_desktop, p_guard = _ports()
     exe = _exe_path()
