@@ -384,6 +384,130 @@ def _infer_read_call(user_text: str) -> list[dict]:
     return []
 
 
+# ---- 从「思考文本」里捞工具意图 ----------------------------------------
+# gpt-oss 这类 reasoning 模型有个习惯：它会在思考里用自然语言说
+#   「We should use fs_ls to list files. Let's use run_cmd with cwd: "xxx"」
+# 然后**直接结束**，既不输出 XML 工具标签，也不输出正文。
+# 结果就是「想了半天，什么也没干」。这里把它说清的工具名与参数还原成真正的调用。
+
+_THINK_TOOL_RE = re.compile(
+    r"(?:use|using|call|run|invoke|应该用|用|调用)\s+(?:the\s+)?"
+    r"(fs_ls|fs_read|fs_write|fs_append|run_cmd|search|fetch)\b", re.I)
+# 路径里不含空格（Windows 路径含空格的情况罕见，且误伤后续中文说明更常见）
+_THINK_PATH_RE = re.compile(
+    r"(?:path|file|cwd|dir(?:ectory)?)\s*[:=]\s*[\"'“]?([^\s\"'”，,;]{2,200})", re.I)
+# 模型也常写成「list files in C:/xxx/yyy」这种不带前缀的形式
+_THINK_ABSPATH_RE = re.compile(r"([A-Za-z]:[\\/][^\s\"'<>|]{2,200})")
+_THINK_CMD_RE = re.compile(
+    r"(?:cmd|command|run)\s*[:=]\s*[\"'“]?([^\"'”\n]{2,300})", re.I)
+_THINK_CMD_VERB_RE = re.compile(
+    r"\b(findstr|grep|dir\s|ls\s|cat\s|type\s|python\s+\S+\.py|node\s+\S+\.js)\b", re.I)
+
+
+def _infer_call_from_reasoning(reasoning: str) -> list[dict]:
+    """从模型的思考文本里还原它想调的工具。
+
+    模型经常会写「先用 fs_ls 列目录，然后用 fs_read 读文件」，
+    所以按**每个工具名出现的位置**往后取参数，最多还原 2 个调用。
+    """
+    text = reasoning or ""
+    if not text.strip():
+        return []
+
+    hits = []
+    for m in _THINK_TOOL_RE.finditer(text):
+        nm = m.group(1).lower()
+        if not any(nm == h[0] for h in hits):
+            hits.append((nm, m.end()))
+    if not hits:
+        return []
+
+    def segment(i: int) -> str:
+        """第 i 个工具名之后、**下一个工具名之前**的那段文本。
+
+        不切段的话，fs_ls 会把后面 fs_read 的 path 也当成自己的参数。
+        """
+        start = hits[i][1]
+        nxt = hits[i + 1][1] if i + 1 < len(hits) else len(text)
+        return text[start:nxt]
+
+    def path_after(seg: str) -> str | None:
+        m = _THINK_PATH_RE.search(seg)
+        if m:
+            return m.group(1).strip().rstrip(".,;。\"'")
+        m2 = _THINK_ABSPATH_RE.search(seg)
+        if m2:
+            return m2.group(1).strip().rstrip(".,;。\"'")
+        return None
+
+    def rel_path(path: str | None) -> str | None:
+        if not path:
+            return None
+        try:
+            full, inside = _safe_path(path)
+        except Exception:
+            return None
+        if not inside:
+            return None
+        try:
+            rel = os.path.relpath(full, _ws_root())
+            if rel.startswith(".."):
+                return None
+            return rel.replace("\\", "/")
+        except Exception:
+            return None
+
+    def find_by_name(name: str) -> str | None:
+        """在工作区里按文件名找（模型常在 ls 之后说「读 notes.txt」，
+        那个路径是相对它刚看的那个子目录的）。"""
+        try:
+            base = os.path.basename(name.replace("\\", "/"))
+            if not base:
+                return None
+            for dirpath, _dirs, files in os.walk(_ws_root()):
+                if base in files:
+                    rel = os.path.relpath(os.path.join(dirpath, base), _ws_root())
+                    if not rel.startswith(".."):
+                        return rel.replace("\\", "/")
+        except Exception:
+            return None
+        return None
+
+    calls: list[dict] = []
+    for i, (nm, _pos) in enumerate(hits):
+        seg = segment(i)
+        if nm in ("fs_ls", "fs_read", "fs_write", "fs_append"):
+            raw_path = path_after(seg)
+            p = rel_path(raw_path)
+            if nm == "fs_ls":
+                calls.append({"name": "fs_ls", "args": {"path": p or "."}})
+            elif nm == "fs_read":
+                target = p
+                if target and os.path.isfile(os.path.join(_ws_root(), target.replace("/", os.sep))):
+                    pass
+                elif raw_path:
+                    target = find_by_name(raw_path)   # 按文件名在工作区里找
+                if target:
+                    calls.append({"name": "fs_read", "args": {"path": target}})
+                else:
+                    calls.append({"name": "fs_ls", "args": {"path": p or "."}})
+            else:
+                if p:
+                    calls.append({"name": nm, "args": {"path": p}})
+        elif nm == "run_cmd":
+            m = _THINK_CMD_RE.search(seg)
+            cmd = m.group(1).strip().rstrip(".,;。") if m else None
+            if not cmd:
+                m2 = _THINK_CMD_VERB_RE.search(seg)
+                cmd = m2.group(1).strip() if m2 else None
+            if cmd:
+                calls.append({"name": "run_cmd", "args": {"cmd": cmd[:300], "cwd": "."}})
+        # search / fetch 从思考里猜不准，不推断
+        if len(calls) >= 2:
+            break
+    return calls
+
+
 # ---------------------------------------------------------------- 流式过滤器
 
 
@@ -545,6 +669,26 @@ def is_identity_question(text: str) -> bool:
     return bool(IDENTITY_Q.search(t))
 
 
+# 任务明显指向**这台电脑上**的文件/目录/代码时，不能用联网检索代替读文件。
+# 实测：联网检索常开时，模型会拿着「检索资料」直接回答本机问题，
+# 一次工具都不调，甚至编造出根本没读过的文件内容。
+_WS_TASK_RE = re.compile(
+    r"([A-Za-z]:[\\/]|\\\\[^\s\\]+\\|工作区|当前目录|这个目录|该目录|这个文件夹|"
+    r"本地文件|这个文件|该文件|代码库|这个仓库|当前仓库|目录树|"
+    r"\b[\w./\\-]+\.(py|js|ts|tsx|jsx|json|md|txt|csv|yaml|yml|html|css|go|rs|java|c|cpp|h|sh|bat)\b|"
+    r"(读|打开|看看|查看|搜索|搜|检索|列出|浏览|新建|创建|修改|编辑|运行|执行|跑)"
+    r".{0,10}(文件|目录|文件夹|代码|脚本|项目))",
+    re.I)
+
+
+def is_workspace_task(text: str) -> bool:
+    """判断问题是不是在问本机文件/目录/代码（这类问题要动工具，不要联网检索）。"""
+    t = (text or "").strip()
+    if not t or len(t) > 500:
+        return False
+    return bool(_WS_TASK_RE.search(t))
+
+
 def heuristic_search(user_text: str, answer: str) -> bool:
     if is_identity_question(user_text):
         return False
@@ -673,6 +817,7 @@ class Runner:
         sources: list[dict] = []
         searched = False
         used_tools: list[dict] = []
+        tool_retry = 0
         step = 0
         final_text = ""
         intent_done = False
@@ -707,7 +852,9 @@ class Runner:
         # 预检索：问题明显需要时效性资料时，先把资料放到首轮上下文里，
         # 小模型（3B 级）很难自己触发检索，先喂资料比让它「知道自己不知道」可靠得多。
         pre_ctx: list[dict] = []
-        if search_on and not is_identity_question(user_text) and heuristic_search(user_text, ""):
+        if (search_on and not is_identity_question(user_text)
+                and not is_workspace_task(user_text)
+                and heuristic_search(user_text, "")):
             self.emit({"type": "status", "text": "问题涉及最新信息，正在联网检索…"})
             try:
                 r0 = search.search(user_text, limit=int(se.get("max_results", 6)))
@@ -732,7 +879,13 @@ class Runner:
             raw_parts: list[str] = []
             shown_parts: list[str] = []
             err = None
-            for ev in engine.stream_chat(convo, temperature=(tier.get("defaults") or {}).get("temperature")):
+            _td = tier.get("defaults") or {}
+            for ev in engine.stream_chat(convo,
+                                        temperature=_td.get("temperature"),
+                                        reasoning_effort=_td.get("reasoning"),
+                                        # reasoning 的思考 token 也算在 max_tokens 里，
+                                        # 给太小会让模型「想完就没了」，正文被截成空。
+                                        max_tokens=int(_td.get("max_tokens") or 4096)):
                 if self.stop_flag.is_set():
                     break
                 if ev["type"] == "token":
@@ -773,6 +926,24 @@ class Runner:
 
             calls = self.parse_tools(raw) if agent_ok else []
 
+            # reasoning 模型（gpt-oss / R1 系）有个坑：它经常把工具标签写在
+            # **思考里**而不是正文里，正文只剩空壳。只扫正文会一次工具都调不到，
+            # 表现就是「想了半天，什么也没干」。所以正文没扫到时，再扫一遍思考。
+            if not calls and agent_ok and self.reasoning.strip():
+                calls = self.parse_tools(self.reasoning)
+                if calls:
+                    self.emit({"type": "status",
+                               "text": "工具调用出现在思考里，已按正文处理"})
+
+            # 再退一步：模型在思考里用自然语言说了要调什么
+            # （「We should use fs_ls to list files」），但既没给 XML 标签也没给正文。
+            # 这时把它说清的工具还原成真正的调用，别让它白想。
+            if not calls and agent_ok and self.reasoning.strip():
+                calls = _infer_call_from_reasoning(self.reasoning)
+                if calls:
+                    self.emit({"type": "status",
+                               "text": "模型在思考里说明了要调用工具，正在执行"})
+
             # 框架兜底：模型没发工具标签，但用户话里明确点名了某个要读的文件
             # （3B 权重常见：口头说「正在读取…」却直接编内容）——这时由框架
             # 替他跑一遍只读工具，把真实结果回灌，杜绝凭空编造。
@@ -804,6 +975,21 @@ class Runner:
 
             # 没有工具调用 → 判断是否需要补一次检索
             if not calls:
+                # 本机文件/代码任务，模型却一次工具都没调就直接答 —— 它多半在编造
+                # 文件内容（实测会凭空写出一段根本没读过的代码）。
+                # 强制它先用 fs_ls / fs_read 看真实内容。
+                if (is_workspace_task(user_text) and step < max_steps
+                        and tool_retry < 1):
+                    tool_retry += 1
+                    self.emit({"type": "status",
+                               "text": "还没读到本机文件，让它先用文件工具查一遍"})
+                    convo.append({"role": "assistant",
+                                  "content": raw[:2000] or "（未作答）"})
+                    convo.append({"role": "user", "content":
+                                  "这个问题要看这台电脑上的真实文件，"
+                                  "请先用 fs_ls / fs_read 工具去查看真实内容，"
+                                  "拿到之后再回答；不要凭空猜测文件里写了什么。"})
+                    continue
                 conf, need = search.confidence_of(raw)
                 body_wo_tags = search.strip_tags(raw)
                 want = False
@@ -821,6 +1007,11 @@ class Runner:
                         want = False
                         self.emit({"type": "status",
                                    "text": "这是关于 Lumen 自身的问题，直接回答，不做联网检索"})
+                    elif is_workspace_task(user_text):
+                        # 本机文件/代码任务 → 该用工具，不该拿互联网资料代替
+                        want = False
+                        self.emit({"type": "status",
+                                   "text": "这是本机文件任务，改用文件工具去查，不做联网检索"})
                     else:
                         searched = True
                         before_len = len(body_wo_tags)
@@ -858,8 +1049,15 @@ class Runner:
                 # 结论却没落地。这时别交白卷：把思考结果转成一句提示，
                 # 让用户知道发生了什么，而不是看到一个空回答。
                 if not final_text.strip() and self.reasoning.strip():
-                    final_text = ("（这一轮模型只在思考里展开，没有给出结论。"
-                                  "上面是它的思考过程，可以让我「直接给结论」或换个问法再来一次。）")
+                    # 模型把结论写在了思考里。把它捞出来当回答 ——
+                    # 总比交一个空白强，用户也能接着往下聊。
+                    tail = self.reasoning.strip()[-1200:]
+                    final_text = ("（模型这一轮把结论写在了思考过程里，这里是它的原文摘录：\n"
+                                  + tail + "\n\n你可以让我「直接给结论」再答一遍，或换个问法。）")
+                if final_text.strip() and not shown.strip():
+                    # 兜底文案是这轮新生成的，前面没有随 token 推出去过 ——
+                    # 不补一次 emit，前端只会看到一个空白回答。
+                    self.emit({"type": "token", "text": final_text})
                 self.emit({
                     "type": "done",
                     "sources": sources,
@@ -875,7 +1073,9 @@ class Runner:
                 return
 
             # 有工具调用：展示卡片 → 执行 → 回灌
-            convo.append({"role": "assistant", "content": raw})
+            # 正文为空时（工具标签写在思考里），要把思考里的调用回灌给模型，
+            # 否则它看不到自己「刚才打算做什么」，下一轮会原地打转。
+            convo.append({"role": "assistant", "content": raw or self.reasoning[-4000:]})
             results_block = []
             for call in calls[:2]:
                 name = call["name"]
@@ -923,7 +1123,19 @@ class Runner:
                 convo = [sys_msg] + convo[-30:]
 
         # 步数用尽
-        msg = final_text or "（已达到本次工具调用步数上限，先停在这里。可以让我继续下一步。）"
+        msg = (final_text or "").strip()
+        if not msg:
+            # 模型把结论写在了思考里 —— 捞出来，别交白卷
+            tail = self.reasoning.strip()[-1200:]
+            if tail:
+                msg = ("（本次工具调用步数用尽，模型把结论写在了思考过程里，这里是原文摘录：\n"
+                       + tail + "\n\n你可以让我「直接给结论」再答一遍，或让我继续下一步。）")
+            else:
+                msg = "（已达到本次工具调用步数上限，先停在这里。可以让我继续下一步。）"
+        if not shown.strip():
+            # 这段话是新生成的，前面没有随 token 推出去过 —— 不补一次 emit，
+            # 前端只会看到一个空白回答。
+            self.emit({"type": "token", "text": msg})
         self.emit({"type": "done", "sources": sources, "tools": used_tools, "engine": "model", "truncated": True})
         store.add_message(session_id, "assistant", msg,
                           {"sources": sources, "tools": used_tools,

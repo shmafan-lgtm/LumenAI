@@ -974,7 +974,8 @@ function drawerAbout() {
 
   <div class="sec"><div class="sec-h">这些模型是谁写的</div>
     <div class="doc"><ul>
-      <li><b>Lumen H1 Turbo / mini se / V1 Ultra</b>：由<b>「想念也是麻烦」制作</b>。</li>
+      <li><b>Lumen H1 Turbo</b>：由<b>「想念也是麻烦」制作</b>。</li>
+      <li><b>Lumen V1 Ultra / mini se / Core 3B</b>：由<b>「想念也是麻烦」修改并增强</b>。</li>
       <li>各档位的上游来源与许可证声明见 <b>licenses/</b> 目录（安装包内必须保留，不可删除）。</li>
       <li>「档位」是能力定位，「权重」才是真正跑起来的东西——界面显示的档位名与实际加载的权重永远一致。</li>
     </ul></div>

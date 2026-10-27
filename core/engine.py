@@ -249,6 +249,7 @@ def stream_chat(messages: list[dict], **kw) -> Iterator[dict]:
                 max_tokens=kw.get("max_tokens", 2048),
                 num_ctx=(st.get("engine") or {}).get("num_ctx"),
                 timeout=(st.get("engine") or {}).get("timeout", 180),
+                reasoning_effort=kw.get("reasoning_effort"),
             )
             return
         # 再退到内置 ONNX 后端
@@ -285,13 +286,20 @@ def stream_chat(messages: list[dict], **kw) -> Iterator[dict]:
         num_ctx=eng.get("num_ctx"),
         timeout=eng.get("timeout", 180),
         api_key=eng.get("api_key"),
+        reasoning_effort=kw.get("reasoning_effort"),
     )
 
 
 def _stream_openai(base: str, model: str, messages: list[dict], temperature: float = 0.6,
                    max_tokens: int = 2048, num_ctx: int | None = None,
-                   timeout: float = 180, api_key: str | None = None) -> Iterator[dict]:
-    """标准 OpenAI 兼容 SSE 流式对话。"""
+                   timeout: float = 180, api_key: str | None = None,
+                   reasoning_effort: str | None = None) -> Iterator[dict]:
+    """标准 OpenAI 兼容 SSE 流式对话。
+
+    reasoning_effort：reasoning 模型（gpt-oss / R1 系）的思考力度。
+    不传的话端端点会用默认档（对 gpt-oss 通常是 high），实测一个普通任务能烧
+    2 万字思考、跑 130 秒，用户看到的是长时间"转圈"。按档位显式指定更合适。
+    """
     payload = {
         "model": model,
         "messages": messages,
@@ -301,6 +309,8 @@ def _stream_openai(base: str, model: str, messages: list[dict], temperature: flo
     }
     if num_ctx:
         payload["num_ctx"] = int(num_ctx)
+    if reasoning_effort:
+        payload["reasoning_effort"] = str(reasoning_effort)
 
     headers = {
         "Content-Type": "application/json",
