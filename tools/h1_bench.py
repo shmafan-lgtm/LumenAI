@@ -130,8 +130,36 @@ def setup_workspace() -> None:
     print("  埋了 4 处标记：notes.txt / data/config.json / src/calc.py / docs/readme.md")
 
 
+def _auto_approve(stop) -> None:
+    """后台自动批准审批请求（模拟用户在弹窗点「允许」）。
+
+    写文件与执行命令在 require_approval=true 时要人点头，
+    无人点就 120 秒超时被拒 —— 自测必须自己当那个「点头的人」。
+    """
+    while not stop.is_set():
+        try:
+            with OPENER.open(BASE + "/api/approvals", timeout=5) as r:
+                d = json.loads(r.read().decode())
+            for item in (d.get("tools") or []):
+                aid = item.get("id")
+                if not aid:
+                    continue
+                req = urllib.request.Request(
+                    BASE + "/api/approve",
+                    data=json.dumps({"id": aid, "approved": True}).encode("utf-8"),
+                    headers={"Content-Type": "application/json"}, method="POST")
+                OPENER.open(req, timeout=5).read()
+                print(f"    [自动批准] {item.get('title','')}")
+        except Exception:
+            pass
+        stop.wait(1.0)
+
+
 def ask(question: str, timeout: int = 420) -> dict:
     """走 /api/chat，收集 SSE。"""
+    import threading
+    stop = threading.Event()
+    threading.Thread(target=_auto_approve, args=(stop,), daemon=True).start()
     payload = {"message": question}
     req = urllib.request.Request(
         BASE + "/api/chat",
@@ -169,6 +197,7 @@ def ask(question: str, timeout: int = 420) -> dict:
                         statuses.append(ev.get("text", ""))
                     elif t == "thinking" and ev.get("state") == "done":
                         reasoning.append(ev.get("text", ""))
+    stop.set()
     return {
         "text": "".join(tokens),
         "tools": tools,

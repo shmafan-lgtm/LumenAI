@@ -141,9 +141,35 @@ def _ws_root() -> str:
     return config.WORKSPACE_DIR
 
 
+def _clean_path(s: str) -> str:
+    """清洗模型给出的路径。
+
+    模型经常写成 `{"path":"h1_bench`"}` 这种带反引号的脏字符串
+    （非法 JSON 之外，路径本身也被污染），工具会直接报「目录不存在」。
+    在工具层统一兜一道，比在解析层打补丁更稳。
+    """
+    p = (s or "").strip()
+    p = p.strip("`\"'“”‘’")
+    p = p.rstrip(".,;:!?)]}，。；：！？")
+    return p.strip()
+
+
 def _safe_path(p: str) -> tuple[str, bool]:
     root = os.path.abspath(_ws_root())
-    raw = (p or ".").strip().strip('"').strip("'")
+    raw = _clean_path(p or ".")
+    # 模型给的路径经常已经带着工作区根（甚至被拼接过两次）。
+    # 这里先判断「它是不是已经在工作区里」，是就直接用，别再拼一遍 ——
+    # 否则会出现 workspace\workspace\xxx 这种模型完全看不懂的路径。
+    try:
+        norm = os.path.normpath(raw)
+        rnorm = os.path.normpath(root)
+        if norm.lower() == rnorm.lower():
+            return root, True
+        if norm.lower().startswith(rnorm.lower() + os.sep):
+            full = os.path.abspath(norm)
+            return full, True
+    except Exception:
+        pass
     if os.path.isabs(raw):
         full = os.path.abspath(raw)
     else:
@@ -189,7 +215,9 @@ def tool_fs_ls(args: dict) -> dict:
                 items.append({"name": name})
     except Exception as e:
         return {"error": str(e)}
-    return {"path": full, "count": len(items), "entries": items}
+    return {"path": full, "count": len(items), "entries": items,
+            "note": "已列出该目录下的直接内容（文件与子目录）。"
+                    "要进子目录请把 path 改成该子目录名。"}
 
 
 def tool_fs_read(args: dict) -> dict:
@@ -319,9 +347,61 @@ def tool_fetch(args: dict) -> dict:
     return {"url": url, "content": txt}
 
 
+def tool_fs_grep(args: dict) -> dict:
+    """在工作区文件的**内容**里搜索关键词，返回命中的文件与行号。
+
+    模型常常只知道 fs_ls（列文件名），不知道怎么搜内容，
+    于是把「找某个字符串」的任务用 fs_ls 反复试 —— 这个工具一步到位。
+    """
+    pattern = (args.get("pattern") or args.get("query") or args.get("text")
+               or args.get("keyword") or "").strip()
+    if not pattern:
+        return {"error": "缺少要搜索的关键词（pattern）"}
+    root = os.path.abspath(_ws_root())
+    sub, _ = _safe_path(args.get("path", "."))
+    if not os.path.isdir(sub):
+        sub = root
+    hits: list[dict] = []
+    scanned = 0
+    max_files = int(args.get("max_files", 600) or 600)
+    for dirpath, dirs, files in os.walk(sub):
+        dirs[:] = [d for d in dirs
+                   if not d.startswith(".") and d not in ("node_modules", "__pycache__",
+                                                        ".git", "dist", "build")]
+        for name in sorted(files):
+            fp = os.path.join(dirpath, name)
+            try:
+                if os.path.getsize(fp) > 4 * 1024 * 1024:
+                    continue
+                with open(fp, "r", encoding="utf-8", errors="replace") as f:
+                    for i, line in enumerate(f, 1):
+                        if pattern in line:
+                            rel = os.path.relpath(fp, root).replace("\\", "/")
+                            hits.append({"file": rel, "line": i,
+                                         "text": line.strip()[:200]})
+                            if len(hits) >= 60:
+                                break
+            except OSError:
+                continue
+            scanned += 1
+            if scanned >= max_files or len(hits) >= 60:
+                break
+        if len(hits) >= 60 or scanned >= max_files:
+            break
+    return {
+        "pattern": pattern,
+        "count": len(hits),
+        "hits": hits,
+        "scanned_files": scanned,
+        "note": ("已给出命中的文件与行号，直接引用这些行回答用户。"
+                 if hits else "工作区里没有包含该关键词的内容"),
+    }
+
+
 TOOLS: dict[str, Callable[[dict], dict]] = {
     "fs_ls": tool_fs_ls,
     "fs_read": tool_fs_read,
+    "fs_grep": tool_fs_grep,
     "fs_write": tool_fs_write,
     "fs_append": tool_fs_append,
     "run_cmd": tool_run_cmd,
@@ -332,6 +412,7 @@ TOOLS: dict[str, Callable[[dict], dict]] = {
 TOOL_LABELS = {
     "fs_ls": "浏览目录",
     "fs_read": "读取文件",
+    "fs_grep": "搜索文件内容",
     "fs_write": "写入文件",
     "fs_append": "追加内容",
     "run_cmd": "执行命令",
@@ -404,7 +485,7 @@ def _infer_read_call(user_text: str) -> list[dict]:
 
 _THINK_TOOL_RE = re.compile(
     r"(?:use|using|call|run|invoke|应该用|用|调用)\s+(?:the\s+)?"
-    r"(fs_ls|fs_read|fs_write|fs_append|run_cmd|search|fetch)\b", re.I)
+    r"(fs_ls|fs_read|fs_grep|fs_write|fs_append|run_cmd|search|fetch)\b", re.I)
 # 路径里不含空格（Windows 路径含空格的情况罕见，且误伤后续中文说明更常见）
 _THINK_PATH_RE = re.compile(
     r"(?:path|file|cwd|dir(?:ectory)?)\s*[:=]\s*[\"'“]?([^\s\"'”，,;]{2,200})", re.I)
@@ -495,7 +576,19 @@ def _infer_call_from_reasoning(reasoning: str) -> list[dict]:
     calls: list[dict] = []
     for i, (nm, _pos) in enumerate(hits):
         seg = segment(i)
-        if nm in ("fs_ls", "fs_read", "fs_write", "fs_append"):
+        if nm == "fs_grep":
+            pat = None
+            mp = re.search(r"pattern\s*[:=]\s*[\"'“]?([^\"'”\n,;]{1,120})", seg, re.I)
+            if mp:
+                pat = mp.group(1).strip()
+            if not pat:
+                mq = re.search(r"(?:search|grep|find|搜|查找|搜索)\s+(?:for\s+)?[\"'“]?([^\"'”\n,;]{1,120})",
+                               seg, re.I)
+                if mq:
+                    pat = mq.group(1).strip()
+            if pat:
+                calls.append({"name": "fs_grep", "args": {"pattern": pat, "path": p or "."}})
+        elif nm in ("fs_ls", "fs_read", "fs_write", "fs_append"):
             raw_path = path_after(seg)
             p = rel_path(raw_path)
             if nm == "fs_ls":
@@ -530,8 +623,22 @@ def _infer_call_from_reasoning(reasoning: str) -> list[dict]:
                 if nm == "fs_write":
                     fname_m = _THINK_FILE_RE.search(seg) or _THINK_FILE_RE.search(text)
                     fname = fname_m.group(1) if fname_m else None
-                    code_m = _THINK_CODE_RE.search(seg) or _THINK_CODE_RE.search(text)
-                    content = code_m.group(1).strip("'\"") if code_m else None
+                    # 内容取**最后**一个匹配：模型常常先说错、纠正一遍再给正确内容，
+                    # 抓第一个会把它写错的草稿写进文件。
+                    code_all = _THINK_CODE_RE.findall(seg) or _THINK_CODE_RE.findall(text)
+                    content = None
+                    # 优先用「像代码」的候选（print(...) / console.log(...)）。
+                    # 引号里的散文是模型的思考草稿，写进文件就是一堆垃圾。
+                    for cand in code_all:
+                        cand = cand.strip().strip("'\"")
+                        if "print(" in cand or "console.log" in cand or "echo " in cand:
+                            content = cand
+                    if not content:
+                        for cand in reversed(code_all):
+                            cand = cand.strip().strip("'\"")
+                            if len(cand) > 3 and "\n" not in cand and " " not in cand.strip():
+                                content = cand
+                                break
                     if fname and content:
                         target = p or find_by_name(fname)
                         if not target:

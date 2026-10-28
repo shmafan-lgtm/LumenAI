@@ -17,6 +17,7 @@ TOOLS_DOC = """可用工具（需要时输出一段 XML 标签，标签外不要
 
 <tool name="fs_ls">{"path": "."}</tool>
 <tool name="fs_read">{"path": "src/main.py", "max_chars": 8000}</tool>
+<tool name="fs_grep">{"pattern": "要找的关键词", "path": "."}</tool>
 <tool name="fs_write">{"path": "notes/todo.md", "content": "..."}</tool>
 <tool name="fs_append">{"path": "logs/a.log", "content": "..."}</tool>
 <tool name="run_cmd">{"cmd": "python -V", "cwd": ".", "timeout": 30}</tool>
@@ -30,7 +31,9 @@ TOOLS_DOC = """可用工具（需要时输出一段 XML 标签，标签外不要
 - 工具失败时读取错误信息自行修正，不要重复同样的错误调用超过两次。
 - 严禁凭空编造文件内容、命令输出或网页正文。没调用过工具就不知道内容，必须先调用。
 - 输出工具调用时只写标签本身，不要写任何介绍性文字，也不要把上面的示例当成真实任务。
-- **任务涉及本机文件、目录、代码时，第一步必须是用 fs_ls / fs_read 去看真实文件**。
+- **任务涉及本机文件、目录、代码时，第一步必须是用 fs_ls / fs_read / fs_grep 去看真实文件**。
+- **要在文件内容里找某个字符串时用 fs_grep**（它直接给出文件与行号），
+  不要靠 fs_ls 反复列目录猜。
   联网检索得到的资料说的是互联网上的内容，和这台电脑上的文件无关，
   绝不能用检索资料代替读文件，也不要因为"检索资料里没有"就回答"找不到"。
 - 只有当问题本身是关于互联网上的公开信息（版本号、价格、新闻、别人的仓库）时才用 search。
