@@ -233,14 +233,24 @@ class RelayAgent:
         path = req.get("path") or "/"
         raw = req.get("body_b64") or ""
         try:
-            body = base64.b64decode(raw.encode("ascii")) if raw else b""
+            body_bytes = base64.b64decode(raw.encode("ascii")) if raw else b""
         except Exception:
-            body = b""
+            body_bytes = b""
         headers = req.get("headers") or {}
+
+        # 控制类接口（/api/guard、/api/login、/api/pair 等）需要读取 JSON 参数，
+        # 而手机经隧道发来的是原始字节，这里先按 Content-Type 解析成 dict 再交给本地应答。
+        parsed = body_bytes
+        req_ctype = (headers.get("Content-Type") or "").lower()
+        if "application/json" in req_ctype and body_bytes:
+            try:
+                parsed = json.loads(body_bytes.decode("utf-8"))
+            except Exception:
+                parsed = body_bytes
 
         # 控制类接口优先由 Guard 本地应答（主AI未开也能用）
         st, ctype, out_hdrs, out_body = _local_serve(path, method,
-                                                      headers, body)
+                                                      headers, parsed)
         if st is None:
             # 主AI未开且非控制类 → 提示唤醒
             if not lumen_running():
@@ -251,7 +261,7 @@ class RelayAgent:
                                 ensure_ascii=False).encode("utf-8"))
             else:
                 try:
-                    st, ctype, out_hdrs, out_body = _proxy(method, path, headers, body)
+                    st, ctype, out_hdrs, out_body = _proxy(method, path, headers, body_bytes)
                 except Exception as e:
                     guard_log(f"relay proxy {method} {path}: {e}")
                     st, ctype, out_hdrs, out_body = (
@@ -300,9 +310,6 @@ class RelayAgent:
     def stop(self):
         self.stop_evt.set()
         STATE["running"] = False
-
-    def stop(self):
-        self.stop_evt.set()
 
 
 _AGENT = None
