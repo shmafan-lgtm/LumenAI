@@ -355,7 +355,14 @@ padding:9px 16px;border-radius:11px;font-size:13px;z-index:99;opacity:0;transiti
       <div class="sect">关于</div>
       <div class="card">
         <div class="note">Lumen 手机端只做三件事：发现你的电脑、看它的会话、在授权后控制它。
-        所有数据都在你自己的局域网 / 虚拟内网里流动。</div>
+        所有数据都在你自己的局域网 / 虚拟内网 / 中继隧道里流动。</div>
+      </div>
+      <div id="wakeBox" style="display:none">
+        <div class="card" style="border-color:rgba(228,183,124,.4)">
+          <div class="row"><div class="g"><b>主 AI 未运行</b><span>电脑在线，但 Lumen 主程序已关闭</span></div></div>
+          <div class="note" style="margin:6px 0 10px">点下方按钮，由本机守护进程 LumenGuard 把它拉起来，稍候刷新即可远程控制 / 对话。</div>
+          <button class="btn" id="btnWake">唤醒主 AI</button>
+        </div>
       </div>
       <button class="btn ghost" id="btnLogout" style="margin-top:8px">退出登录</button>
     </div>
@@ -377,7 +384,7 @@ var BOOT = JSON.parse(document.getElementById('lumen-boot') ? '{}' : '{}');
 var TOK = localStorage.getItem('lumen_tok') || '';
 var $ = function(s){return document.querySelector(s)};
 var esc = function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])})};
-var S = {sessions:[], cur:null, msgs:[], authorized:false, sid:null, dragging:false};
+var S = {sessions:[], cur:null, msgs:[], authorized:false, sid:null, dragging:false, lumen_running:true};
 
 function toast(m){var t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('on')},1800)}
 
@@ -426,7 +433,8 @@ function syncNativeToken(){
 function enter(acc){
   $('#login').style.display='none';
   $('#main').classList.add('on');
-  if(acc){ $('#devName').textContent = acc.device_name || 'Lumen'; $('#connState').textContent = acc.host_os || ''; }
+  if(acc){ $('#devName').textContent = acc.device_name || 'Lumen'; $('#connState').textContent = acc.host_os || ''; S.lumen_running = (acc.lumen_running === false) ? false : true; }
+  refreshWake();
   loadSessions();
   setInterval(function(){ api('/api/remote/status').then(function(st){
     var was = S.authorized;
@@ -719,11 +727,26 @@ $('#btnKb').onclick=function(){
 };
 
 /* ---------------- 设备 ---------------- */
+function refreshWake(){
+  var box=$('#wakeBox');
+  if(!box) return;
+  if(S.lumen_running){ box.style.display='none'; }
+  else { box.style.display='block'; }
+}
+$('#btnWake').onclick=function(){
+  var b=this; b.textContent='正在唤醒…'; b.disabled=true;
+  api('/api/guard',{action:'START'}).then(function(r){
+    toast(r && r.ok ? '已发送唤醒指令，稍候刷新' : '唤醒失败');
+    setTimeout(function(){ location.reload(); }, 3500);
+  }).catch(function(e){ toast('唤醒失败：'+e.message); b.textContent='唤醒主 AI'; b.disabled=false; });
+};
 function loadDevices(){
   api('/api/devices').then(function(r){
     var self=r.self||{};
+    S.lumen_running = (self.lumen_running === false) ? false : true;
+    refreshWake();
     $('#devList').innerHTML='<div class="card"><div class="row"><div class="g"><b>'+esc(self.device_name||'这台电脑')+
-      '</b><span>'+esc(self.host_os||'')+' · 账号 '+esc(self.username||'')+'</span></div><span class="pill ok">在线</span></div></div>'+
+      '</b><span>'+esc(self.host_os||'')+' · 账号 '+esc(self.username||'')+'</span></div><span class="pill '+(S.lumen_running?'ok':'gold')+'">'+(S.lumen_running?'主AI在线':'主AI未运行')+'</span></div></div>'+
       '<div class="note" style="margin-top:8px">同一账号的手机都会出现在这里。远控需要电脑端逐次授权。</div>';
   }).catch(function(e){ $('#devList').innerHTML='<div class="note">'+esc(e.message)+'</div>'; });
 }

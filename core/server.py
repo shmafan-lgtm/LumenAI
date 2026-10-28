@@ -218,6 +218,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/guard/status":
                 return self._json(_guard_call("STATUS"))
 
+            if path == "/api/relay/status":
+                return self._json(_guard_call("RELAY"))
+
             if path == "/api/lan":
                 st = config.settings()
                 ips = auth.lan_ips()
@@ -424,6 +427,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": auth.revoke_token(body.get("token", ""))})
             if path == "/api/guard":
                 return self._json(_guard_call(body.get("action", "STATUS").upper()))
+            if path == "/api/relay/reload":
+                return self._json(_guard_call("RELAYRELOAD"))
             if path == "/api/remote/allow":
                 merged = config.patch_settings({
                     "remote": {

@@ -372,6 +372,19 @@ class H(BaseHTTPRequestHandler):
             return self._ok(GUARD.start_lumen(by="api"))
         if path in ("/stop_lumen", "/stop"):
             return self._ok(GUARD.stop_lumen(by="api"))
+        if path == "/relay" or path == "/relay/status":
+            try:
+                from relay_agent import STATE
+                return self._ok({"ok": True, "relay": dict(STATE)})
+            except Exception as e:
+                return self._ok({"ok": False, "relay": {"running": False, "error": str(e)}})
+        if path == "/relay/reload" or path == "/relayreload":
+            try:
+                from relay_agent import reload_from_settings
+                reload_from_settings()
+                return self._ok({"ok": True})
+            except Exception as e:
+                return self._ok({"ok": False, "error": str(e)})
         if path == "/shutdown":
             threading.Thread(target=self._shutdown, daemon=True).start()
             return self._ok({"ok": True, "bye": True})
@@ -572,6 +585,12 @@ def _boot() -> None:
         pass
     serve_control(port)
     threading.Thread(target=GUARD.watchdog, daemon=True, name="watchdog").start()
+    # 跨网中继：电脑在别处、手机用流量也能连；主AI未开也能唤醒
+    try:
+        from relay_agent import start_from_settings
+        start_from_settings()
+    except Exception as e:
+        log(f"relay agent 启动失败：{e}")
     log(f"guard booted pid={os.getpid()} port={port}")
 
 

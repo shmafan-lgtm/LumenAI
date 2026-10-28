@@ -729,7 +729,25 @@ function renderDrawer() {
   else if (S.drawer === 'guard') box.innerHTML = drawerGuard();
   else box.innerHTML = drawerAbout();
   bindDrawer();
-  if (S.drawer === 'phone') { paintQr(); loadFirewall(); }
+  if (S.drawer === 'phone') { paintQr(); loadFirewall(); showRelayState(); }
+}
+
+async function showRelayState() {
+  const el = $('#relayState');
+  if (!el) return;
+  el.textContent = '查询中…';
+  try {
+    const r = await api('/api/relay/status');
+    const s = (r && r.relay) || {};
+    if (s.running) {
+      const up = s.since ? Math.max(0, Math.round((Date.now() / 1000) - s.since)) + 's' : '';
+      el.innerHTML = '<span class="pill good">已连接中继</span> ' + esc(s.host || '') + (up ? ' · 已连 ' + up : '');
+    } else {
+      el.textContent = s.error ? ('未连接：' + s.error) : '中继未启用或未连接';
+    }
+  } catch (e) {
+    el.textContent = '无法查询中继状态：' + e.message;
+  }
 }
 
 /* 局域网二维码：手机相机扫一下就能直连，不用手输 IP */
@@ -869,6 +887,20 @@ function drawerPhone() {
       ${urls.map((u) => `<div class="url-box"><span>${esc(u)}</span>
         <button class="btn sm" data-copytext="${esc(u)}" style="margin-left:auto">复制</button></div>`).join('') || '<div class="note">未检测到局域网 IP</div>'}
     ` : '<div class="note">开启后可在手机端查看会话、授权远控、并在 Lumen 未启动时唤起它。</div>'}
+  </div>
+
+  <div class="sec"><div class="sec-h">跨网中继（电脑在别处也能连）</div>
+    <div class="note">不想只在同一 Wi-Fi 下用？自己搭一个中继（<b>tools/relay_server.py</b>，一条命令起，纯标准库），
+      电脑侧的 LumenGuard 会主动拨号连上去，手机用流量也能连、也能唤醒主 AI。</div>
+    <div class="field"><label>启用中继<span class="hint">关闭则只在局域网内可连</span></label>${sw((S.settings.relay || {}).enabled === true, 'relay.enabled')}</div>
+    <div class="field"><label>中继地址<span class="hint">形如 http://你的中继:8772</span></label>
+      <input type="text" id="f-relay-host" value="${esc((S.settings.relay || {}).host || '')}" placeholder="http://relay.example.com:8772" style="width:230px"></div>
+    <div class="field"><label>中继密钥<span class="hint">与中继启动时 --secret 一致</span></label>
+      <input type="password" id="f-relay-secret" value="${esc((S.settings.relay || {}).secret || '')}" placeholder="与中继端一致" style="width:200px"></div>
+    <div class="btn-row"><button class="btn sm primary" id="btnSaveRelay">保存并重连</button>
+      <button class="btn sm" id="btnRelayStatus">查看连接</button></div>
+    <div id="relayState" class="note"></div>
+    <div class="doc" style="margin-top:8px">手机端连接：用浏览器打开 <b>中继地址</b>，输入同一把密钥，即可跳转到 Lumen 手机端（数据只过你的中继，不落地第三方）。</div>
   </div>
 
   <div class="sec"><div class="sec-h">配对</div>
@@ -1109,6 +1141,19 @@ function bindDrawer() {
     box.innerHTML = `<span>配对码 <b style="font-size:17px;letter-spacing:.18em">${esc(r.code)}</b></span>`;
     toast('5 分钟内有效', 'ok');
   });
+  on('btnSaveRelay', 'click', async () => {
+    const host = ($('#f-relay-host') || {}).value || '';
+    const secret = ($('#f-relay-secret') || {}).value || '';
+    const enabled = !!($('[data-sw="relay.enabled"]') || {}).classList.contains('on');
+    try {
+      const r = await api('/api/settings', { settings: { relay: { enabled, host, secret } } });
+      S.settings = r.settings;
+      await api('/api/relay/reload', {});
+      toast('已保存并通知守护进程重连', 'ok');
+      showRelayState();
+    } catch (e) { toast(e.message, 'err'); }
+  });
+  on('btnRelayStatus', 'click', () => showRelayState());
   $$('[data-revoke]').forEach((b) => b.addEventListener('click', async () => {
     toast('请在手机端退出，或在下方吊销后重新配对');
   }));

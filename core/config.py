@@ -147,6 +147,9 @@ DEFAULT_SETTINGS = {
         "idle_timeout": 900,   # 远控会话空闲自动断开（秒），0 = 不自动断开
     },
     "guard": {"enabled": True, "restart_on_exit": True, "port": 8771},
+    # 跨网中继：电脑在别处、手机用流量也能连。默认关闭，需在桌面端「手机/中继」里填写。
+    # host 形如 http://你的中继地址:8772 ；secret 与中继服务端启动时 --secret 一致。
+    "relay": {"enabled": False, "host": "", "port": 8772, "secret": ""},
     "first_run_done": False,
 }
 
