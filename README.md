@@ -578,6 +578,26 @@ python tools/relay_server.py --port 8772 --secret "你自定义的密钥"
 python tools/relay_server.py --self-test
 ```
 
+**部署要点（跨网能成的唯一硬前提）：中继必须能被手机（蜂窝网）访问到。**
+
+最简方案——**中继直接跑在家里的电脑上**，再用隧道只把 `8772` 暴露出去：
+
+```bash
+# 家里电脑上，先起中继
+python tools/relay_server.py --port 8772 --secret "你的密钥"
+# 任选其一，把本机 8772 暴露到公网（手机用返回的地址连）：
+cloudflared tunnel --url http://127.0.0.1:8772      # Cloudflare Quick Tunnel，临时地址
+# 或
+ngrok http 8772                                    # ngrok，临时地址
+# 或自建 frp / 路由器端口转发（固定地址）
+```
+
+此时本机 LumenGuard 走 `127.0.0.1:8772` 拨号（绕开自家 NAT），手机用隧道给的公网地址连。
+中继只做穿 NAT 的转发，**不存储任何聊天或画面内容**。
+
+也可以把中继跑在任意一台有公网 IP 的小机器上（VPS / 旧笔记本 / 树莓派），
+家用电脑的 Guard 填那台机器的地址即可。
+
 **电脑端开启：** 桌面端「手机同步 / 远控 → 跨网中继」填中继地址
 （形如 `http://你的中继:8772`）与同一把密钥，保存后守护进程会自动重连。
 
