@@ -14,6 +14,9 @@ public final class Prefs {
     private static final String NAME = "lumen";
     private static final String K_HOST = "host";
     private static final String K_TOKEN = "token";
+    private static final String K_MODE = "mode";
+    private static final String K_RELAY_HOST = "relay_host";
+    private static final String K_RELAY_SECRET = "relay_secret";
 
     private Prefs() {
     }

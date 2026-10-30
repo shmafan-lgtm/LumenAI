@@ -47,6 +47,12 @@
     "port": 8771,
     "_说明": "LumenGuard 守护服务：开机自启 + 异常退出自动拉起，可在界面里查看状态或让它停止。"
   },
+  "relay": {
+    "enabled": true,
+    "host": "http://127.0.0.1:8772",
+    "port": 8772,
+    "secret": "Lumen-1870a6376c1d"
+  },
   "first_run_done": false,
   "_说明": "Lumen 主配置。界面「设置」里的改动会写回这个文件；删掉它会用内置默认值重建。"
 }

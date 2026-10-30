@@ -10,4 +10,10 @@
     <string name="notif_channel_desc">远程控制请求与连接状态提醒</string>
     <string name="notif_service_title">Lumen 已连接</string>
     <string name="notif_service_text">正在监听这台电脑的远程控制请求</string>
+    <string name="mode_direct">直连电脑</string>
+    <string name="mode_relay">跨网中继</string>
+    <string name="relay_hint">中继地址，例如 https://abc.trycloudflare.com</string>
+    <string name="relay_secret_hint">中继密钥</string>
+    <string name="relay_connecting">正在通过中继连接…</string>
+    <string name="relay_err_empty">请填写中继地址与密钥</string>
 </resources>

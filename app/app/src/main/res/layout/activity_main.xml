@@ -104,6 +104,70 @@
                 android:textColor="@color/teal"
                 android:textSize="14sp" />
 
+            <RadioGroup
+                android:id="@+id/rgMode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="16dp">
+
+                <RadioButton
+                    android:id="@+id/rbDirect"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/mode_direct"
+                    android:checked="true"
+                    android:textColor="@color/txt_dark"
+                    android:textSize="13sp" />
+
+                <RadioButton
+                    android:id="@+id/rbRelay"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginLeft="18dp"
+                    android:text="@string/mode_relay"
+                    android:textColor="@color/txt_dark"
+                    android:textSize="13sp" />
+            </RadioGroup>
+
+            <EditText
+                android:id="@+id/relayHostInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:background="@drawable/bg_input"
+                android:hint="@string/relay_hint"
+                android:textColor="@color/txt_dark"
+                android:textColorHint="@color/txt_dark_2"
+                android:textSize="15sp"
+                android:paddingLeft="14dp"
+                android:paddingRight="14dp"
+                android:paddingTop="13dp"
+                android:paddingBottom="13dp"
+                android:inputType="textUri"
+                android:importantForAutofill="no"
+                android:singleLine="true"
+                android:visibility="gone" />
+
+            <EditText
+                android:id="@+id/relaySecretInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_input"
+                android:hint="@string/relay_secret_hint"
+                android:textColor="@color/txt_dark"
+                android:textColorHint="@color/txt_dark_2"
+                android:textSize="15sp"
+                android:paddingLeft="14dp"
+                android:paddingRight="14dp"
+                android:paddingTop="13dp"
+                android:paddingBottom="13dp"
+                android:inputType="textPassword"
+                android:importantForAutofill="no"
+                android:singleLine="true"
+                android:visibility="gone" />
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
