@@ -209,11 +209,11 @@ h1{font-size:20px;margin:0 0 4px}p{color:#6B7280;font-size:13px;margin:0 0 20px}
 .note{font-size:12px;color:#6B7280;margin-top:16px;line-height:1.7}</style></head><body>
 <div class="c"><div class="m">L</div><h1>Lumen Link 中继</h1>
 <p>输入你在电脑端设置里配置的同一把中继密钥</p>
-<input class="in" id="k" placeholder="中继密钥" type="password">
+<input class="in" id="k" placeholder="中继密钥" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
 <button class="b" id="go">连接</button>
 <div class="note">连接后跳转到你的 Lumen 手机端（经加密隧道到你的电脑）。<br>这台中继只帮你穿过 NAT，不存储任何聊天或画面内容。</div></div>
 <script>document.getElementById('go').onclick=function(){var k=document.getElementById('k').value.trim();
-if(!k){return}var f=new FormData();f.append('k',k);fetch('/relay/connect',{method:'POST',body:f}).then(function(r){return r.json()}).then(function(d){
+if(!k){return}var fd='k='+encodeURIComponent(k);fetch('/relay/connect',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd}).then(function(r){return r.json()}).then(function(d){
 if(d.ok){location.href='/m'}else{alert(d.error||'密钥错误')}}).catch(function(){alert('连接失败')})}</script>
 </body></html>"""
         self._send(200, html, "text/html; charset=utf-8")
