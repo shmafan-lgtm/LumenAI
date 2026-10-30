@@ -213,8 +213,10 @@ h1{font-size:20px;margin:0 0 4px}p{color:#6B7280;font-size:13px;margin:0 0 20px}
 <button class="b" id="go">连接</button>
 <div class="note">连接后跳转到你的 Lumen 手机端（经加密隧道到你的电脑）。<br>这台中继只帮你穿过 NAT，不存储任何聊天或画面内容。</div></div>
 <script>document.getElementById('go').onclick=function(){var k=document.getElementById('k').value.trim();
-if(!k){return}var fd='k='+encodeURIComponent(k);fetch('/relay/connect',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd}).then(function(r){return r.json()}).then(function(d){
-if(d.ok){location.href='/m'}else{alert(d.error||'密钥错误')}}).catch(function(){alert('连接失败')})}</script>
+if(!k){return}var b=document.getElementById('go');b.disabled=true;b.textContent='连接中…';
+function tryConn(n){var fd='k='+encodeURIComponent(k);fetch('/relay/connect',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd}).then(function(r){return r.json()}).then(function(d){
+if(d.ok){location.href='/m'}else{if(n<=1){alert(d.error||'密钥错误')}else{tryConn(n-1)}}}).catch(function(){if(n<=1){alert('连接失败，请重试')}else{setTimeout(function(){tryConn(n-1)},700)}})}
+tryConn(3);}</script>
 </body></html>"""
         self._send(200, html, "text/html; charset=utf-8")
 

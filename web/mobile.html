@@ -391,14 +391,22 @@ function toast(m){var t=$('#toast');t.textContent=m;t.classList.add('on');clearT
 function api(path, body){
   var h = {'Content-Type':'application/json'};
   if (TOK) h['Authorization'] = 'Bearer ' + TOK;
-  return fetch(path, {method: body===undefined?'GET':'POST', headers:h, body: body===undefined?undefined:JSON.stringify(body)})
-    .then(function(r){
+  var opt = {method: body===undefined?'GET':'POST', headers:h, body: body===undefined?undefined:JSON.stringify(body)};
+  // 经公网隧道(Cloudflare 等)偶发抖动，网络层失败自动重试，业务错误(如密码错)不重试
+  function attempt(n){
+    return fetch(path, opt).then(function(r){
       return r.text().then(function(t){
-        var d; try{d=JSON.parse(t)}catch(e){d={error:t}}
-        if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+        var d; try{d=JSON.parse(t)}catch(e){d={error:t||'空响应'}}
+        if(!r.ok){ var e=new Error(d.error||('HTTP '+r.status)); e._http=true; throw e; }
         return d;
       });
+    }).catch(function(err){
+      if(err && err._http) throw err;                 // 业务错误不重试
+      if(n<=1) throw (err||new Error('网络错误'));    // 重试用尽
+      return new Promise(function(res){ setTimeout(res, 700); }).then(function(){ return attempt(n-1); });
     });
+  }
+  return attempt(3);
 }
 
 /* ---------------- 登录 ---------------- */
