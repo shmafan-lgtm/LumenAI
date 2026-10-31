@@ -18,8 +18,8 @@
   python tools/relay_server.py --port 8772 --secret "你的密钥"
   python tools/relay_server.py --self-test        # 内置冒烟测试
 
-转发方式（v1）：逐请求缓冲转发。普通 API、远控画面轮询都没问题；
-对话的 SSE 会等整段回答完成后一次性返回（后续版本可升级为分块流式）。
+转发方式：分块流式转发。普通 API、远控画面轮询都没问题；
+对话的 SSE 也支持逐块回传，手机端可以一边生成一边看到 token，不再卡到整段结束。
 """
 from __future__ import annotations
 
@@ -247,7 +247,7 @@ tryConn(3);}</script>
 
     # -------------------------------------------------- 设备侧接口
     def _relay(self, path):
-        # /relay/register | /relay/take | /relay/reply/<id>
+        # /relay/register | /relay/take | /relay/reply/<id> | /relay/chunk/<id>
         if not self._secret_ok():
             return self._json({"ok": False, "error": "密钥错误"}, 403)
         tail = path[len("/relay/"):].split("?")[0].strip("/")
@@ -259,6 +259,9 @@ tryConn(3);}</script>
         if tail == "reply" or tail.startswith("reply"):
             rid = tail[len("reply/"):].split("?")[0]
             return self._reply(rid)
+        if tail == "chunk" or tail.startswith("chunk"):
+            rid = tail[len("chunk/"):].split("?")[0]
+            return self._chunk(rid)
         return self._json({"ok": False, "error": "unknown relay op"}, 404)
 
     def _take(self):
@@ -291,6 +294,7 @@ tryConn(3);}</script>
         return self._json(payload, 200)
 
     def _reply(self, rid):
+        """设备侧首块回传：携带状态码/响应头，body 可为空（流式首块）。final=True 表示结束。"""
         n = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(n) if n else b"{}"
         try:
@@ -301,8 +305,51 @@ tryConn(3);}</script>
             w = _WAITERS.get(rid)
             if w is None:
                 return self._json({"ok": False, "error": "no waiter"}, 404)
-            w["result"] = data
-            w["event"].set()
+            try:
+                body = base64.b64decode((data.get("body_b64") or "").encode("ascii"))
+            except Exception:
+                body = b""
+            w["chunks"].append({
+                "index": int(data.get("index", 0)),
+                "status": int(data.get("status", 200)),
+                "content_type": data.get("content_type") or "application/octet-stream",
+                "headers": data.get("headers") or {},
+                "body": body,
+            })
+            if data.get("final"):
+                w["done"] = True
+            _LOCK.notify_all()
+        return self._json({"ok": True})
+
+    def _chunk(self, rid):
+        """流式分块回传：设备侧把上游响应切成多块逐步发来，手机隧道边收边写。
+
+        首块(index=0)携带状态码与响应头；后续块只携带 body 字节；final=true 表示结束。
+        """
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(n) if n else b"{}"
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except Exception:
+            data = {}
+        with _LOCK:
+            w = _WAITERS.get(rid)
+            if w is None:
+                return self._json({"ok": False, "error": "no waiter"}, 404)
+            try:
+                body = base64.b64decode((data.get("body_b64") or "").encode("ascii"))
+            except Exception:
+                body = b""
+            w["chunks"].append({
+                "index": int(data.get("index", 0)),
+                "status": int(data.get("status", 200)),
+                "content_type": data.get("content_type") or "application/octet-stream",
+                "headers": data.get("headers") or {},
+                "body": body,
+            })
+            if data.get("final"):
+                w["done"] = True
+            _LOCK.notify_all()
         return self._json({"ok": True})
 
     # -------------------------------------------------- 手机侧隧道
@@ -319,28 +366,76 @@ tryConn(3);}</script>
         with _LOCK:
             _QUEUE.append(req)
             ev = threading.Event()
-            _WAITERS[req.id] = {"event": ev, "result": None}
+            _WAITERS[req.id] = {"event": ev, "chunks": [], "done": False, "written": 0}
             _LOCK.notify_all()
-        if not ev.wait(300.0):
+        # 边收边发：设备侧每回一块，这里立刻写给手机（chunked），
+        # 这样手机端能像本地一样逐字看到 token，而不是整段结束后才一次性收到。
+        deadline = _now() + 300.0
+        wrote_head = False
+        while True:
             with _LOCK:
-                _WAITERS.pop(req.id, None)
-            return self._json({"ok": False, "error": "电脑端响应超时"}, 504)
-        with _LOCK:
-            w = _WAITERS.pop(req.id, None)
-        res = (w or {}).get("result") or {}
-        status = int(res.get("status", 502))
-        ctype = res.get("content_type") or "application/json; charset=utf-8"
-        rb = res.get("body_b64") or ""
-        try:
-            out = base64.b64decode(rb.encode("ascii"))
-        except Exception:
-            out = b""
-        extra = {}
-        for k, v in (res.get("headers") or {}).items():
-            if k.lower() in ("content-type", "content-length", "cache-control",
-                             "x-accel-buffering", "x-content-type-options"):
-                extra[k] = v
-        self._send(status, out, ctype, extra, raw=True)
+                w = _WAITERS.get(req.id)
+                if w is None:
+                    return self._json({"ok": False, "error": "内部错误"}, 500)
+                chunks = w["chunks"]
+                # 把「还没写给手机」的块依次写出
+                while w["written"] < len(chunks):
+                    ch = chunks[w["written"]]
+                    w["written"] += 1
+                    if not wrote_head:
+                        meta = ch
+                        status = int(meta.get("status", 502))
+                        ctype = meta.get("content_type") or "application/octet-stream"
+                        base_hdrs = dict(meta.get("headers") or {})
+                        self.send_response(status)
+                        sent_ct = False
+                        for k, v in base_hdrs.items():
+                            lk = k.lower()
+                            if lk in ("content-type", "cache-control",
+                                      "x-accel-buffering", "x-content-type-options"):
+                                self.send_header(k, v)
+                                if lk == "content-type":
+                                    sent_ct = True
+                        if not sent_ct:
+                            self.send_header("Content-Type", ctype)
+                        self.send_header("Transfer-Encoding", "chunked")
+                        self.send_header("Cache-Control", "no-store")
+                        self.send_header("Connection", "close")
+                        self.close_connection = True
+                        self.end_headers()
+                        wrote_head = True
+                    b = ch.get("body") or b""
+                    if b:
+                        try:
+                            self.wfile.write(("%X\r\n" % len(b)).encode("ascii"))
+                            self.wfile.write(b)
+                            self.wfile.write(b"\r\n")
+                            self.wfile.flush()
+                        except Exception:
+                            pass
+                if w["done"]:
+                    try:
+                        self.wfile.write(b"0\r\n\r\n")
+                        self.wfile.flush()
+                    except Exception:
+                        pass
+                    _WAITERS.pop(req.id, None)
+                    return
+            # 还没结束，等下一块
+            with _LOCK:
+                remain = deadline - _now()
+                if remain <= 0:
+                    if wrote_head:
+                        try:
+                            self.wfile.write(b"0\r\n\r\n")
+                            self.wfile.flush()
+                        except Exception:
+                            pass
+                        _WAITERS.pop(req.id, None)
+                        return
+                    _WAITERS.pop(req.id, None)
+                    return self._json({"ok": False, "error": "电脑端响应超时"}, 504)
+                _LOCK.wait(remain)
 
 
 def hmac_eq(a, b) -> bool:
@@ -423,7 +518,8 @@ def _self_test():
             # 回一个应答
             reply = {"status": 200, "content_type": "application/json; charset=utf-8",
                      "headers": {"Content-Type": "application/json"},
-                     "body_b64": base64.b64encode(b'{"hello":"relay"}').decode("ascii")}
+                     "body_b64": base64.b64encode(b'{"hello":"relay"}').decode("ascii"),
+                     "final": True}
             _http(base + "/relay/reply/" + rid, method="POST", headers={"X-Relay-Key": secret},
                   body=json.dumps(reply).encode("utf-8"))
 

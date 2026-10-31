@@ -233,6 +233,10 @@ def tool_fs_read(args: dict) -> dict:
 
 
 def _need_approval_for_write(full: str, inside: bool) -> dict:
+    # 「每个任务提报」模式下，调用前的统一闸门（Runner._gate）已经向用户提报过，
+    # 这里直接放行，避免重复弹审批卡片。
+    if _permission_mode() == "ask":
+        return {"approved": True, "note": "已提报"}
     st = config.settings().get("agent") or {}
     if not st.get("require_approval", True):
         return {"approved": True, "note": "免审批模式"}
@@ -290,13 +294,15 @@ def tool_run_cmd(args: dict) -> dict:
     cwd, inside = _safe_path(args.get("cwd", "."))
     if not os.path.isdir(cwd):
         cwd = _ws_root()
-    decision = approvals.ask(
-        "shell",
-        "AI 想执行命令",
-        f"命令：{cmd}\n目录：{cwd}" + ("" if inside else "\n⚠ 该目录在工作区之外"),
-    )
-    if not decision.get("approved"):
-        return {"error": "用户拒绝了执行", "note": decision.get("note")}
+    # 「每个任务提报」模式下统一闸门已处理审批，这里不再重复询问。
+    if _permission_mode() != "ask" and st.get("require_approval", True):
+        decision = approvals.ask(
+            "shell",
+            "AI 想执行命令",
+            f"命令：{cmd}\n目录：{cwd}" + ("" if inside else "\n⚠ 该目录在工作区之外"),
+        )
+        if not decision.get("approved"):
+            return {"error": "用户拒绝了执行", "note": decision.get("note")}
 
     timeout = float(args.get("timeout", 40) or 40)
     try:
@@ -396,6 +402,31 @@ def tool_fs_grep(args: dict) -> dict:
         "note": ("已给出命中的文件与行号，直接引用这些行回答用户。"
                  if hits else "工作区里没有包含该关键词的内容"),
     }
+
+
+# Agent 工具全局上限：小模型（尤其 gpt-oss 这种「小激活参数」MoE）一旦挂载
+# 太多工具，注意力会被分散，调用经常张冠李戴、甚至整轮空转。硬性限制为最多 4 个，
+# 超出直接拒绝挂载（不会静默截断出 bug）。用户可在设置里自定义这 4 个。
+MAX_AGENT_TOOLS = 4
+# tools 为空时默认挂载的 4 个（读/写/跑命令/联网 —— 覆盖了「操控电脑 + 改代码」）。
+DEFAULT_TOOL_SET = ["search", "run_cmd", "fs_read", "fs_write"]
+
+
+def _allowed_tools() -> list:
+    """返回当前允许挂载的工具名列表（最多 MAX_AGENT_TOOLS 个）。"""
+    st = (config.settings().get("agent") or {})
+    custom = st.get("tools") or []
+    if custom:
+        allowed = [t for t in custom if t in TOOLS][:MAX_AGENT_TOOLS]
+        if allowed:
+            return allowed
+    return DEFAULT_TOOL_SET[:MAX_AGENT_TOOLS]
+
+
+def _permission_mode() -> str:
+    st = (config.settings().get("agent") or {})
+    m = (st.get("permission_mode") or "open").lower()
+    return m if m in ("open", "ask") else "open"
 
 
 TOOLS: dict[str, Callable[[dict], dict]] = {
@@ -871,13 +902,19 @@ class Runner:
         标准格式是 `<tool name="fs_read">{...}</tool>`，但小模型经常写成别的样子
         （`<tool>` 裸名、`<tool_call>`、`<function>`、```tool 代码块、或直接甩一段
         JSON），这里统一兜住，避免「模型其实想调工具却没被识别」导致它凭空编造。
+
+        只保留「当前允许挂载」的 4 个工具（见 _allowed_tools），其余一律丢弃——
+        这是 Agent 工具全局上限的核心 enforcement，避免小模型被过多工具描述冲散。
         """
         calls: list[dict] = []
         seen: set[str] = set()
+        allowed = set(_allowed_tools())
 
         def add(name: str, args: dict) -> None:
             name = (name or "").strip()
             if not name or name not in TOOLS:
+                return
+            if name not in allowed:
                 return
             if not isinstance(args, dict):
                 args = {}
@@ -942,6 +979,21 @@ class Runner:
         except Exception as e:
             return {"error": f"{type(e).__name__}: {e}"}
 
+    def _gate(self, name: str, args: dict) -> tuple[bool, str]:
+        """权限闸门。
+
+        - 完全开放(open)：不拦截（写/命令是否询问仍由 require_approval 决定，在工具内处理）。
+        - 每个任务提报(ask)：任何工具调用都先经 ApprovalBroker 向 UI 提报，
+          用户同意才执行；这会阻塞当前生成线程，直到手机/桌面端点「允许」。
+        """
+        if _permission_mode() != "ask":
+            return True, ""
+        detail = (TOOL_LABELS.get(name, name) + "\n" +
+                  json.dumps(args or {}, ensure_ascii=False)[:500])
+        res = approvals.ask("tool", "AI 想调用：" + TOOL_LABELS.get(name, name),
+                             detail, timeout=180)
+        return res.get("approved", False), res.get("note", "")
+
     # -------- 主循环
     def run(self, session_id: str, user_text: str, history: list[dict]) -> None:
         st = config.settings()
@@ -954,6 +1006,9 @@ class Runner:
         agent_ok = bool(ag.get("enabled", True)) and "agent" in (tier.get("capabilities") or [])
         max_steps = int(ag.get("max_steps", 6))
         ws = _ws_root()
+        # 当前允许挂载的工具（全局上限 4 个）；运行中任何工具调用必须是这 4 个之一。
+        allowed = set(_allowed_tools())
+        perm_mode = _permission_mode()
 
         eng_status = engine.status()
         runtime_model = eng_status.get("model") or ""
@@ -979,6 +1034,7 @@ class Runner:
         final_text = ""
         intent_done = False
         done_keys: dict[str, dict] = {}
+        used_names: set[str] = set()  # 本任务已用过的不同工具名（全局上限 4 个）
 
         self.emit({"type": "meta", "engine": eng_status, "tier": tier["id"], "agent": agent_ok})
 
@@ -1090,13 +1146,13 @@ class Runner:
                     store.add_message(session_id, "assistant", f"[连接失败] {err}", {"error": True})
                     return
 
-            calls = self.parse_tools(raw) if agent_ok else []
+            calls = [c for c in self.parse_tools(raw) if agent_ok and c["name"] in allowed]
 
             # reasoning 模型（gpt-oss / R1 系）有个坑：它经常把工具标签写在
             # **思考里**而不是正文里，正文只剩空壳。只扫正文会一次工具都调不到，
             # 表现就是「想了半天，什么也没干」。所以正文没扫到时，再扫一遍思考。
             if not calls and agent_ok and self.reasoning.strip():
-                calls = self.parse_tools(self.reasoning)
+                calls = [c for c in self.parse_tools(self.reasoning) if c["name"] in allowed]
                 if calls:
                     self.emit({"type": "status",
                                "text": "工具调用出现在思考里，已按正文处理"})
@@ -1105,7 +1161,7 @@ class Runner:
             # （「We should use fs_ls to list files」），但既没给 XML 标签也没给正文。
             # 这时把它说清的工具还原成真正的调用，别让它白想。
             if not calls and agent_ok and self.reasoning.strip():
-                calls = _infer_call_from_reasoning(self.reasoning)
+                calls = [c for c in _infer_call_from_reasoning(self.reasoning) if c["name"] in allowed]
                 if calls:
                     self.emit({"type": "status",
                                "text": "模型在思考里说明了要调用工具，正在执行"})
@@ -1117,7 +1173,7 @@ class Runner:
                 inferred = _infer_read_call(user_text)
                 if inferred:
                     intent_done = True
-                    calls = inferred
+                    calls = [c for c in inferred if c["name"] in allowed]
 
             # 模型这一轮已经给出了实质回答（正文里夹带了一个多余的工具标签），
             # 直接采用这个回答收尾，不再多跑一轮工具——否则会出现「同一工具
@@ -1163,9 +1219,11 @@ class Runner:
                     if always_search:
                         want = True
                     elif conf is not None:
+                        # 低把握（置信度低于阈值）或模型自己声明 need_search → 强制联网查证
                         want = need or conf < threshold
                     else:
-                        want = heuristic_search(user_text, body_wo_tags)
+                        # 置信度解析不到时，若模型显式声明需要检索也强制查；否则走启发式
+                        want = bool(need) or heuristic_search(user_text, body_wo_tags)
                 if want:
                     if is_identity_question(user_text):
                         # 这是问 Lumen 自己是谁做的 —— 答案在系统提示词里，
@@ -1243,15 +1301,32 @@ class Runner:
             # 否则它看不到自己「刚才打算做什么」，下一轮会原地打转。
             convo.append({"role": "assistant", "content": raw or self.reasoning[-4000:]})
             results_block = []
-            for call in calls[:2]:
+            for call in calls[:MAX_AGENT_TOOLS]:
                 name = call["name"]
+                # 全局不同工具数不超过 4（allowed 已保证 ≤4，这里再兜底一次，
+                # 防止某轮 from-reasoning 推断出第 5 个名字）
+                if name not in used_names and len(used_names) >= MAX_AGENT_TOOLS:
+                    self.emit({"type": "status",
+                               "text": f"已达工具上限（{MAX_AGENT_TOOLS} 个），跳过 {TOOL_LABELS.get(name, name)}"})
+                    continue
                 key = name + "|" + json.dumps(call.get("args") or {}, sort_keys=True, ensure_ascii=False)
                 # 同一个工具 + 同样的参数已经成功跑过 → 不重复执行（避免副作用与死循环）
                 if key in done_keys:
                     res = done_keys[key]
                     results_block.append(prompt.tool_result_message(name, res))
                     continue
+                # 权限闸门：每个任务提报模式下先经用户审批；被拒绝则跳过该工具
+                ok_gate, note_gate = self._gate(name, call.get("args"))
                 tid = uuid.uuid4().hex[:8]
+                if not ok_gate:
+                    self.emit({"type": "tool", "id": tid, "name": name,
+                               "label": TOOL_LABELS.get(name, name),
+                               "args": call.get("args"), "status": "rejected",
+                               "result": note_gate})
+                    used_names.add(name)
+                    results_block.append(
+                        prompt.tool_result_message(name, {"error": "用户拒绝了执行", "note": note_gate}))
+                    continue
                 self.emit({
                     "type": "tool",
                     "id": tid,
@@ -1266,6 +1341,7 @@ class Runner:
                     done_keys[key] = res
                 rec = {"id": tid, "name": name, "args": call.get("args"), "ok": ok}
                 used_tools.append(rec)
+                used_names.add(name)
                 self.emit({
                     "type": "tool",
                     "id": tid,

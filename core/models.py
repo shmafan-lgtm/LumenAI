@@ -72,7 +72,7 @@ TIERS: list[dict] = [
         "tier_index": 2,
         "min_vram_gb": 8,
         "recommend_vram_gb": 8,
-        "params": "32B (MoE 稀疏激活)",
+        "params": "20B (MoE 稀疏激活)",
         "ctx": 32768,
         "quant": "Q4_K_M",
         "disk_gb": 10.8,

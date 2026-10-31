@@ -250,6 +250,54 @@ padding:9px 16px;border-radius:11px;font-size:13px;z-index:99;opacity:0;transiti
 .rowline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 4px}
 .sel{background:rgba(255,255,255,.05);border:1px solid var(--line2);color:var(--txt);
   border-radius:10px;padding:8px 10px;font-size:13px;font-family:inherit;max-width:62%}
+
+/* 顶栏当前模型名 */
+.mlabel{display:block;font-size:11px;color:var(--gold);font-family:var(--mono);margin-top:1px}
+
+/* ---------- 模型底部抽屉（像 WorkBuddy 那样直接选） ---------- */
+.sheet{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end}
+.sheet[hidden]{display:none}
+.sheet-mask{position:absolute;inset:0;background:rgba(0,0,0,.5);animation:fade .18s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.sheet-body{position:relative;width:100%;background:var(--panel);border-top-left-radius:18px;border-top-right-radius:18px;
+  padding:14px 16px calc(env(safe-area-inset-bottom) + 16px);max-height:82vh;overflow-y:auto;
+  border-top:1px solid var(--line2);animation:slideup .26s cubic-bezier(.2,.8,.2,1)}
+@keyframes slideup{from{transform:translateY(100%)}to{transform:none}}
+.sheet-hd{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.sheet-hd b{font-size:16px;font-weight:600}
+.sheet-sub{font-size:11.5px;color:var(--txt3);flex:1}
+.sheet-x{width:30px;height:30px;border-radius:9px;color:var(--txt3);font-size:17px;display:grid;place-items:center;flex:none}
+.sheet-x:active{background:rgba(255,255,255,.08)}
+.tier2{display:flex;align-items:center;gap:12px;padding:13px;border-radius:14px;border:1px solid var(--line);
+  background:rgba(255,255,255,.03);margin-bottom:9px}
+.tier2.on{border-color:rgba(228,183,124,.55);background:var(--golddim)}
+.tier2.locked{opacity:.46}
+.tier2 .ic{width:42px;height:42px;border-radius:12px;flex:none;display:grid;place-items:center;font-weight:700;font-size:13px;color:#1a1206;
+  background:linear-gradient(150deg,#F2D3A2,#E4B77C 60%,#B98F52)}
+.tier2 .g{flex:1;min-width:0}
+.tier2 .nm{font-size:14.5px;font-weight:600;display:flex;align-items:center;gap:7px}
+.tier2 .ds{font-size:11.5px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.tier2 .mult{font-size:10.5px;color:var(--txt3);font-family:var(--mono);margin-top:3px}
+.tier2 .ck{width:22px;height:22px;border-radius:50%;border:2px solid var(--line2);flex:none;display:grid;place-items:center;color:transparent;font-size:13px}
+.tier2.on .ck{border-color:var(--gold);background:var(--gold);color:#1a1206}
+.tier2 .badge{font-size:10px;padding:1px 7px;border-radius:20px;border:1px solid var(--line);color:var(--txt3)}
+.tier2 .badge.ok{color:var(--teal);border-color:rgba(95,211,182,.3);background:rgba(95,211,182,.1)}
+.tier2 .badge.lock{color:var(--red);border-color:rgba(240,115,106,.3);background:rgba(240,115,106,.1)}
+
+/* ---------- 权限模式卡片 ---------- */
+.lockmsg{font-size:11px;color:var(--gold)}
+
+/* ---------- 审批卡片（ask 模式） ---------- */
+#apprBox{display:flex;flex-direction:column;gap:8px;padding:8px 12px 2px;max-height:38vh;overflow-y:auto}
+.appr{background:linear-gradient(170deg,rgba(228,183,124,.12),rgba(228,183,124,.03));border:1px solid rgba(228,183,124,.4);
+  border-radius:13px;padding:11px 13px}
+.appr-h{font-size:13.5px;font-weight:600;color:var(--gold);margin-bottom:4px}
+.appr-d{font-size:12px;color:var(--txt2);white-space:pre-wrap;word-break:break-word;max-height:120px;overflow:auto;line-height:1.55}
+.appr-b{display:flex;gap:8px;margin-top:9px}
+.appr-b button{flex:1;padding:9px;border-radius:10px;font-size:13px;font-weight:600;border:1px solid var(--line2)}
+.appr-yes{background:linear-gradient(150deg,#F2D3A2,#E4B77C 60%,#C79A5C);color:#1a1206}
+.appr-no{background:rgba(255,255,255,.05);color:var(--txt2)}
+.appr-b button:active{transform:scale(.98)}
 </style>
 </head>
 <body>
@@ -278,7 +326,10 @@ padding:9px 16px;border-radius:11px;font-size:13px;z-index:99;opacity:0;transiti
 
 <div class="screen" id="main">
   <div class="top">
-    <div class="ttl"><b id="devName">Lumen</b><span id="connState">连接中…</span></div>
+    <div class="ttl"><b id="devName">Lumen</b><span id="connState">连接中…</span><span id="modelName" class="mlabel"></span></div>
+    <button class="icon" id="btnModel" title="切换模型">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7"/></svg>
+    </button>
     <button class="icon" id="btnRefresh" title="刷新">
       <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0115-6.7L21 8M21 21v-5h-5M21 12a9 9 0 01-15 6.7L3 16"/></svg>
     </button>
@@ -294,6 +345,7 @@ padding:9px 16px;border-radius:11px;font-size:13px;z-index:99;opacity:0;transiti
     <!-- 对话 -->
     <div class="pane" id="paneChat">
       <div id="chatBody"></div>
+      <div id="apprBox"></div>
       <div class="composer">
         <textarea id="cinput" rows="1" placeholder="给它发消息…"></textarea>
         <button class="send" id="btnSend"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 8 6 8z"/></svg></button>
@@ -357,6 +409,19 @@ padding:9px 16px;border-radius:11px;font-size:13px;z-index:99;opacity:0;transiti
         <div class="note">Lumen 手机端只做三件事：发现你的电脑、看它的会话、在授权后控制它。
         所有数据都在你自己的局域网 / 虚拟内网 / 中继隧道里流动。</div>
       </div>
+      <div class="sect">权限与隐私</div>
+      <div class="card">
+        <div class="row"><div class="g"><b>AI 工具调用权限</b><span>让它操作本机文件 / 命令的授权方式</span></div></div>
+        <div class="hr"></div>
+        <div class="rowline">
+          <span>授权模式</span>
+          <select id="permSel" class="sel">
+            <option value="open">完全开放（直接执行）</option>
+            <option value="ask">每个任务向自己提报</option>
+          </select>
+        </div>
+        <div class="note" id="permNote" style="margin-top:8px"></div>
+      </div>
       <div id="wakeBox" style="display:none">
         <div class="card" style="border-color:rgba(228,183,124,.4)">
           <div class="row"><div class="g"><b>主 AI 未运行</b><span>电脑在线，但 Lumen 主程序已关闭</span></div></div>
@@ -376,6 +441,15 @@ padding:9px 16px;border-radius:11px;font-size:13px;z-index:99;opacity:0;transiti
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- 模型底部抽屉（像 WorkBuddy 那样直接选） -->
+<div class="sheet" id="modelSheet" hidden>
+  <div class="sheet-mask" id="modelMask"></div>
+  <div class="sheet-body">
+    <div class="sheet-hd"><b>选择模型</b><span class="sheet-sub">本地运行 · 不上传任何数据</span><button class="sheet-x" id="modelClose">✕</button></div>
+    <div id="tierList"></div>
+  </div>
+</div>
 
 <script>
 (function(){
@@ -444,6 +518,8 @@ function enter(acc){
   if(acc){ $('#devName').textContent = acc.device_name || 'Lumen'; $('#connState').textContent = acc.host_os || ''; S.lumen_running = (acc.lumen_running === false) ? false : true; }
   refreshWake();
   loadSessions();
+  loadTiers();
+  loadPermission();
   setInterval(function(){ api('/api/remote/status').then(function(st){
     var was = S.authorized;
     S.authorized = !!st.session; S.sid = st.session?st.session.id:null;
@@ -540,12 +616,13 @@ $('#btnSend').onclick=function(){
   S.msgs.push({role:'user',content:t,meta:{}});
   var ai={role:'assistant',content:'',meta:{}}; S.msgs.push(ai);
   renderChat();
+  startApprovalWatch();
   var h={'Content-Type':'application/json'}; if(TOK) h['Authorization']='Bearer '+TOK;
   fetch('/api/chat',{method:'POST',headers:h,body:JSON.stringify({session_id:S.cur,message:t})}).then(function(res){
     var rd=res.body.getReader(), dec=new TextDecoder(), acc='', buf='';
     function pump(){
       rd.read().then(function(o){
-        if(o.done){ ai.content=buf; renderChat(); return; }
+        if(o.done){ ai.content=buf; renderChat(); stopApprovalWatch(); return; }
         acc += dec.decode(o.value,{stream:true});
         var i;
         while((i=acc.indexOf('\n\n'))>=0){
@@ -565,7 +642,7 @@ $('#btnSend').onclick=function(){
       });
     }
     pump();
-  }).catch(function(e){ toast('发送失败：'+e.message); });
+  }).catch(function(e){ toast('发送失败：'+e.message); stopApprovalWatch(); });
 };
 
 
@@ -760,6 +837,107 @@ function loadDevices(){
 }
 $('#btnLogout').onclick=function(){ localStorage.removeItem('lumen_tok'); try{if(window.LumenNative&&LumenNative.syncToken)LumenNative.syncToken('');}catch(e){} location.reload(); };
 $('#btnRefresh').onclick=function(){ loadSessions(); toast('已刷新'); };
+
+/* ---------------- 模型底部抽屉 ---------------- */
+function loadTiers(){
+  api('/api/tiers').then(function(r){
+    S.tiers = r.tiers||[];
+    S.model = r.current;
+    var cur = (S.tiers.filter(function(t){return t.id===r.current})[0]) || S.tiers[0] || {};
+    $('#modelName').textContent = cur.name || '';
+  }).catch(function(){});
+}
+function openModelSheet(){
+  var list = (S.tiers||[]).map(function(t){
+    var on = t.id===S.model;
+    var badge = t.available
+      ? '<span class="badge ok">本机可跑</span>'
+      : '<span class="badge lock">需 '+esc(t.min_vram_gb||'?')+'GB 显存</span>';
+    return '<div class="tier2 '+(on?'on ':'')+(t.available?'':'locked')+'" data-tier="'+esc(t.id)+'">'
+      + '<div class="ic">'+ (t.tier_index===3?'V1':t.tier_index===2?'H1':t.tier_index===1?'SE':'CORE') +'</div>'
+      + '<div class="g"><div class="nm">'+esc(t.name)+ (on?' <span class="badge ok">当前</span>':'') +'</div>'
+      + '<div class="ds">'+esc((t.strengths||[]).slice(0,2).join(' · '))+'</div>'
+      + '<div class="mult">'+esc(t.params||'')+' · '+badge+'</div></div>'
+      + '<div class="ck">'+(on?'✓':'')+'</div></div>';
+  }).join('');
+  $('#tierList').innerHTML = list;
+  Array.prototype.forEach.call(document.querySelectorAll('#tierList .tier2'), function(el){
+    el.onclick=function(){
+      var id=el.dataset.tier;
+      api('/api/tier',{tier:id}).then(function(r){
+        S.model=id; if(r.settings) S.settings=r.settings;
+        closeModelSheet(); loadTiers();
+        var nm=((S.tiers||[]).filter(function(t){return t.id===id})[0]||{}).name||id;
+        toast('已切换：'+nm);
+      }).catch(function(e){ toast('切换失败：'+e.message); });
+    };
+  });
+  $('#modelSheet').hidden=false;
+}
+function closeModelSheet(){ $('#modelSheet').hidden=true; }
+$('#btnModel').onclick=openModelSheet;
+$('#modelClose').onclick=closeModelSheet;
+$('#modelMask').onclick=closeModelSheet;
+
+/* ---------------- 权限模式（完全开放 / 每个任务提报） ---------------- */
+function loadPermission(){
+  api('/api/settings').then(function(r){
+    var pm = (((r.settings||{}).agent)||{}).permission_mode || 'open';
+    S.perm = pm;
+    var sel=$('#permSel'); if(sel) sel.value = pm;
+    paintPermNote();
+  }).catch(function(){});
+}
+function paintPermNote(){
+  var el=$('#permNote'); if(!el) return;
+  el.textContent = (S.perm==='ask')
+    ? '提问或让它做事时，每调用一次工具都会在这里弹出提报卡片，你点「允许」才会执行。'
+    : 'AI 可直接执行工具（写文件、跑命令等），不再逐项问你。';
+}
+$('#permSel').onchange=function(){
+  var v=this.value;
+  api('/api/settings',{settings:{agent:{permission_mode:v}}}).then(function(){
+    S.perm=v; paintPermNote();
+    toast(v==='ask'?'已设为：每个任务提报':'已设为：完全开放');
+  }).catch(function(e){ toast('设置失败：'+e.message); });
+};
+
+/* ---------------- 审批卡片（ask 模式：每个任务提报） ---------------- */
+var _apprTimer=null;
+function startApprovalWatch(){
+  stopApprovalWatch();
+  pollApprovals();
+  _apprTimer=setInterval(pollApprovals, 1100);
+}
+function stopApprovalWatch(){
+  if(_apprTimer){ clearInterval(_apprTimer); _apprTimer=null; }
+  var b=$('#apprBox'); if(b) b.innerHTML='';
+}
+function pollApprovals(){
+  api('/api/approvals').then(function(r){
+    var tools=(r.tools||[]);
+    var box=$('#apprBox'); if(!box) return;
+    if(!tools.length){ box.innerHTML=''; return; }
+    box.innerHTML = tools.map(function(a){
+      return '<div class="appr"><div class="appr-h">'+esc(a.title||'操作待确认')+'</div>'
+        + '<div class="appr-d">'+esc(a.detail||'')+'</div>'
+        + '<div class="appr-b"><button class="appr-no" data-id="'+esc(a.id)+'">拒绝</button>'
+        + '<button class="appr-yes" data-id="'+esc(a.id)+'">允许</button></div></div>';
+    }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('.appr-yes'), function(b){
+      b.onclick=function(){ resolveApproval(b.dataset.id, true); };
+    });
+    Array.prototype.forEach.call(box.querySelectorAll('.appr-no'), function(b){
+      b.onclick=function(){ resolveApproval(b.dataset.id, false); };
+    });
+  }).catch(function(){});
+}
+function resolveApproval(id, ok){
+  api('/api/approve',{id:id, approved:ok}).then(function(){
+    toast(ok?'已允许':'已拒绝');
+    pollApprovals();
+  }).catch(function(e){ toast('操作失败：'+e.message); });
+}
 
 /* 自动登录 */
 if(TOK){ api('/api/devices').then(function(r){ syncNativeToken(); enter(r.self); }).catch(function(){ localStorage.removeItem('lumen_tok'); }); }

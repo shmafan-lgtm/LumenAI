@@ -44,8 +44,13 @@ def _main_port() -> int:
     return int((settings().get("remote") or {}).get("port", 8770) or 8770)
 
 
-def _proxy(method: str, path: str, headers: dict, body: bytes):
-    """反向代理到本机 Lumen 主程序。返回 (status, content_type, resp_headers, body)。"""
+def _proxy_stream(self, rid: str, method: str, path: str, headers: dict, body: bytes):
+    """反向代理到本机 Lumen 主程序，分块流式回传（修复 SSE 整段缓冲导致的「无回复」）。
+
+    首块只带状态码/响应头（body 先空），让手机尽快拿到响应头；
+    随后按上游产生的节奏逐块把 body 推给中继；末块 final=True 收尾。
+    对普通 JSON 接口也兼容：整段会作为首块后的若干块发完，最后补一个 final 空块。
+    """
     port = _main_port()
     c = http.client.HTTPConnection("127.0.0.1", port, timeout=280)
     fwd = {}
@@ -57,7 +62,6 @@ def _proxy(method: str, path: str, headers: dict, body: bytes):
     try:
         c.request(method, path, body=body or None, headers=fwd)
         r = c.getresponse()
-        data = r.read()
         ctype = r.getheader("Content-Type", "application/octet-stream")
         out_hdrs = {}
         for k in ("Content-Type", "Content-Length", "Cache-Control",
@@ -65,10 +69,42 @@ def _proxy(method: str, path: str, headers: dict, body: bytes):
             v = r.getheader(k)
             if v is not None:
                 out_hdrs[k] = v
-        return r.status, ctype, out_hdrs, data
-    finally:
+        # 首块：先交响应头，body 暂空，手机可立即开始解析 SSE
+        try:
+            self._reply(rid, r.status, ctype, out_hdrs, b"", final=False)
+        except Exception as e:
+            guard_log("relay stream first block: %s" % e)
+            try:
+                c.close()
+            except Exception:
+                pass
+            return
+        idx = 1
+        try:
+            for line in r:
+                if not line:
+                    continue
+                self._chunk(rid, idx, line, final=False)
+                idx += 1
+        except Exception as e:
+            guard_log("relay stream body: %s" % e)
+        # 收尾块
+        try:
+            self._chunk(rid, idx, b"", final=True)
+        except Exception:
+            pass
         try:
             c.close()
+        except Exception:
+            pass
+    except Exception as e:
+        guard_log("relay proxy %s %s: %s" % (method, path, e))
+        try:
+            self._reply(rid, 502, "application/json",
+                        {"Content-Type": "application/json"},
+                        json.dumps({"ok": False, "error": "代理到主AI失败：%s" % e},
+                                   ensure_ascii=False).encode("utf-8"),
+                        final=True)
         except Exception:
             pass
 
@@ -205,12 +241,13 @@ class RelayAgent:
             return None
 
     # ---------------------------------------------------------- 回包
-    def _reply(self, rid: str, status: int, ctype: str, headers: dict, body: bytes):
+    def _reply(self, rid: str, status: int, ctype: str, headers: dict, body: bytes, final: bool = False):
         payload = {
             "status": status,
             "content_type": ctype,
             "headers": headers or {},
             "body_b64": base64.b64encode(body or b"").decode("ascii"),
+            "final": bool(final),
         }
         for _ in range(3):
             try:
@@ -224,6 +261,27 @@ class RelayAgent:
                 return
             except Exception as e:
                 guard_log(f"relay reply: {e}")
+                time.sleep(1)
+
+    def _chunk(self, rid: str, index: int, body: bytes, final: bool = False):
+        """流式后续块：把上游响应的 body 分片逐步发往中继。final=True 表示结束。"""
+        payload = {
+            "index": int(index),
+            "body_b64": base64.b64encode(body or b"").decode("ascii"),
+            "final": bool(final),
+        }
+        for _ in range(3):
+            try:
+                c = http.client.HTTPConnection(self.host, self.port, timeout=30)
+                c.request("POST", "/relay/chunk/" + rid,
+                          body=json.dumps(payload).encode("utf-8"),
+                          headers={"X-Relay-Key": self.secret,
+                                   "Content-Type": "application/json"})
+                c.getresponse().read()
+                c.close()
+                return
+            except Exception as e:
+                guard_log(f"relay chunk: {e}")
                 time.sleep(1)
 
     # ---------------------------------------------------------- 处理一条
@@ -251,24 +309,21 @@ class RelayAgent:
         # 控制类接口优先由 Guard 本地应答（主AI未开也能用）
         st, ctype, out_hdrs, out_body = _local_serve(path, method,
                                                       headers, parsed)
-        if st is None:
-            # 主AI未开且非控制类 → 提示唤醒
-            if not lumen_running():
-                st, ctype, out_hdrs, out_body = (
-                    503, "application/json", {"Content-Type": "application/json"},
-                    json.dumps({"ok": False,
-                                "error": "主AI未运行，请在手机端「设备」页点「唤醒主AI」"},
-                                ensure_ascii=False).encode("utf-8"))
-            else:
-                try:
-                    st, ctype, out_hdrs, out_body = _proxy(method, path, headers, body_bytes)
-                except Exception as e:
-                    guard_log(f"relay proxy {method} {path}: {e}")
-                    st, ctype, out_hdrs, out_body = (
-                        502, "application/json", {"Content-Type": "application/json"},
-                        json.dumps({"ok": False, "error": "代理到主AI失败：%s" % e},
-                                   ensure_ascii=False).encode("utf-8"))
-        self._reply(rid, st, ctype, out_hdrs, out_body)
+        if st is not None:
+            # 控制类接口由 Guard 本地应答，单块回传即可
+            self._reply(rid, st, ctype, out_hdrs, out_body, final=True)
+            return
+        # 主AI未开且非控制类 → 提示唤醒
+        if not lumen_running():
+            self._reply(rid, 503, "application/json",
+                        {"Content-Type": "application/json"},
+                        json.dumps({"ok": False,
+                                    "error": "主AI未运行，请在手机端「设备」页点「唤醒主AI」"},
+                                   ensure_ascii=False).encode("utf-8"),
+                        final=True)
+            return
+        # 否则走流式反向代理（SSE 友好，修复「对话无回复」）
+        _proxy_stream(self, rid, method, path, headers, body_bytes)
 
     def _worker(self):
         while not self.stop_evt.is_set():

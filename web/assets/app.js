@@ -849,6 +849,14 @@ function drawerSettings() {
     <div class="field"><label>允许执行命令</label>${sw(ag.allow_shell !== false, 'agent.allow_shell')}</div>
     <div class="field"><label>单轮最大步数</label>
       <input type="number" id="f-steps" value="${ag.max_steps || 6}" min="1" max="20"></div>
+    <div class="field"><label>权限模式<span class="hint">open=完全开放 / ask=每个任务提报</span></label>
+      <select id="f-perm">
+        <option value="open" ${(ag.permission_mode || 'open') === 'open' ? 'selected' : ''}>完全开放（直接执行）</option>
+        <option value="ask" ${(ag.permission_mode || 'open') === 'ask' ? 'selected' : ''}>每个任务向自己提报</option>
+      </select></div>
+    <div class="field"><label>工具调用上限<span class="hint">全局硬性限制，最多 4 个</span></label>
+      <input type="number" id="f-maxtools" value="${ag.max_tools || 4}" min="1" max="4"></div>
+    <div class="btn-row"><button class="btn sm primary" id="btnSaveAgent">保存 Agent 设置</button></div>
     <div class="field"><label>工作区目录</label><button class="btn sm" id="btnOpenWs">打开</button></div>
   </div>
 
@@ -1068,8 +1076,7 @@ function bindDrawer() {
         },
       });
       S.settings = r.settings;
-      S.engine = await api('/api/engine/rediscover');
-      renderTopbar();
+      S.engine = await api('/api/engine/rediscover');      renderTopbar();
       toast(S.engine.online ? '引擎已连接' : '未探测到端点，仍使用离线引擎', S.engine.online ? 'ok' : 'err');
       renderDrawer();
     } catch (e) { toast(e.message, 'err'); }
@@ -1097,6 +1104,23 @@ function bindDrawer() {
       renderTopbar();
       renderDrawer();
       toast(r.stopped ? '本地运行时已停止' : '没有由 Lumen 启动的运行时', 'ok');
+    } catch (e) { toast(e.message, 'err'); }
+  });
+  on('btnSaveAgent', 'click', async () => {
+    try {
+      const mt = Math.max(1, Math.min(4, parseInt($('#f-maxtools').value, 10) || 4));
+      const r = await api('/api/settings', {
+        settings: {
+          agent: {
+            max_steps: Math.max(1, Math.min(20, parseInt($('#f-steps').value, 10) || 6)),
+            permission_mode: $('#f-perm').value || 'open',
+            max_tools: mt,
+          },
+        },
+      });
+      S.settings = r.settings;
+      renderDrawer();
+      toast('Agent 设置已保存', 'ok');
     } catch (e) { toast(e.message, 'err'); }
   });
   on('btnSaveSearch', 'click', async () => {

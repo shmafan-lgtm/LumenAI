@@ -133,6 +133,13 @@ DEFAULT_SETTINGS = {
     "agent": {
         "enabled": True,
         "max_steps": 6,
+        # 权限模式：open=完全开放（不拦截，写/命令按 require_approval 仍可能询问）
+        #           ask =每个任务向自己提报（任何工具调用都先经审批卡片，同意才执行）
+        "permission_mode": "open",
+        # 工具全局上限：Agent 同时可挂载的工具最多 4 个（小模型挂多工具极易失稳）。
+        # tools 为空时取 DEFAULT_TOOL_SET 的前 4 个；用户自定义若超过 4 个会被截断。
+        "max_tools": 4,
+        "tools": [],
         "require_approval": True,
         "allow_shell": True,
     },
