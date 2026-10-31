@@ -229,6 +229,48 @@ def patch_settings(patch: dict) -> dict:
     return save_settings(deep_merge(settings(), patch))
 
 
+# ---------------------------------------------------------------- 中继密钥
+#
+# 为什么密钥不放 config/settings.json：
+#   config/ 是**随包分发**的模板（打包后是 _internal/config），
+#   谁拿到公版包，谁就能读到里面的中继密钥 → 直接连上你的电脑。
+#   所以密钥只放 data/ —— data/ 是运行时状态，永远不进包。
+#
+# 优先级：settings.relay.secret（用户手动指定）> data/relay_secret.json > 随机生成。
+RELAY_SECRET_PATH = os.path.join(DATA_DIR, "relay_secret.json")
+
+
+def relay_secret() -> str:
+    """取本机中继密钥；没有就随机生成一个并落到 data/（不随包分发）。"""
+    try:
+        s = ((settings().get("relay") or {}).get("secret") or "").strip()
+        if s:
+            return s
+    except Exception:
+        pass
+    try:
+        with open(RELAY_SECRET_PATH, "r", encoding="utf-8") as f:
+            s = (json.load(f).get("secret") or "").strip()
+            if s:
+                return s
+    except Exception:
+        pass
+    return relay_secret_rotate()
+
+
+def relay_secret_rotate() -> str:
+    """换一把新的中继密钥（旧密钥立刻失效，手机需重新扫码）。"""
+    import secrets as _secrets
+    s = "Lumen-" + _secrets.token_hex(6)
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(RELAY_SECRET_PATH, "w", encoding="utf-8") as f:
+            json.dump({"secret": s, "created": time.time()}, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    return s
+
+
 def log(name: str, msg: str) -> None:
     try:
         line = time.strftime("%Y-%m-%d %H:%M:%S") + "  " + msg.replace("\n", " | ") + "\n"

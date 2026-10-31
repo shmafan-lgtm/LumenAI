@@ -25,6 +25,8 @@ DESKTOP_TOKEN = ""
 
 ACTIVE: dict[str, agent.Runner] = {}
 _active_lock = threading.Lock()
+# 最近一次完整回复（按会话），供公网隧道(SSE 被掐)的兼容模式取回，不重跑不重复执行工具
+_LAST_REPLY: dict[str, dict] = {}
 
 
 def _desktop_token() -> str:
@@ -220,6 +222,20 @@ class Handler(BaseHTTPRequestHandler):
 
             if path == "/api/relay/status":
                 return self._json(_guard_call("RELAY"))
+
+            if path == "/api/relay/info":
+                # 手机端真正要填的「公网隧道地址」+ 中继密钥。
+                # 隧道每 ~50 分钟轮换一次，桌面端这里实时显示当前活地址，
+                # 手机扫二维码 / 一键复制即可，不再依赖被墙的 GitHub 地址簿。
+                addresses = []
+                try:
+                    with open(os.path.join(config.DATA_DIR, "relay_addresses.json"),
+                              encoding="utf-8") as fh:
+                        addresses = (json.load(fh).get("addresses") or [])
+                except Exception:
+                    pass
+                secret = config.relay_secret()
+                return self._json({"addresses": addresses, "secret": secret})
 
             if path == "/api/lan":
                 st = config.settings()
@@ -423,6 +439,9 @@ class Handler(BaseHTTPRequestHandler):
                 if len(pwd) < 4:
                     return self._err("密码至少 4 位")
                 return self._json({"ok": True, "account": auth.set_password(pwd)})
+            if path == "/api/account/rotate":
+                # 换成随机强密码（公版安全：默认口令人人可猜，必须让用户自己换）
+                return self._json(auth.rotate_initial_password())
             if path == "/api/devices/revoke":
                 return self._json({"ok": auth.revoke_token(body.get("token", ""))})
             if path == "/api/guard":
@@ -527,7 +546,7 @@ class Handler(BaseHTTPRequestHandler):
             "license_dir": config.LICENSE_DIR,
         }
 
-    # ------------------------------------------------------------ 对话 SSE
+    # ------------------------------------------------------------ 对话 SSE / 兼容兜底
     def _chat(self, body: dict, who: dict | None):
         sid = body.get("session_id") or ""
         text = (body.get("message") or "").strip()
@@ -542,6 +561,16 @@ class Handler(BaseHTTPRequestHandler):
         store.add_message(sid, "user", text, {"device": (who or {}).get("device_name", "本机")})
         store.touch_title(sid, text)
 
+        # ---- 兼容模式：serveo 等公网隧道会把 SSE 掐断，前端收不到 token ----
+        # recover=从已生成结果里取回（不再跑一遍，避免重复执行工具）；否则正常跑一遍聚合成 JSON。
+        if not body.get("stream", True):
+            if body.get("recover") and sid in _LAST_REPLY:
+                r = _LAST_REPLY[sid]
+                return self._json({"ok": True, "session_id": sid, "recovered": True,
+                                   "reply": r.get("reply", ""), "reasoning": r.get("reasoning", ""),
+                                   "sources": r.get("sources", [])})
+            return self._chat_collect(sid, text, history)
+
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
@@ -550,15 +579,22 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.close_connection = True
 
+        acc = {"reply": "", "reasoning": "", "sources": []}
+
         def emit(ev: dict):
-            if ev.get("type") == "meta":
+            t = ev.get("type")
+            if t == "token":
+                acc["reply"] += ev.get("text", "")
+            elif t == "thinking" and ev.get("state") == "end":
+                acc["reasoning"] = ev.get("text", "")
+            elif t == "sources":
+                acc["sources"] = ev.get("sources", [])
+            if t == "meta":
                 ev["session_id"] = sid
             try:
                 self.wfile.write(("data: " + json.dumps(ev, ensure_ascii=False) + "\n\n").encode("utf-8"))
                 self.wfile.flush()
             except Exception:
-                runner = None
-            if ev.get("type") in ("tool",):
                 pass
 
         runner = agent.Runner(emit)
@@ -575,12 +611,42 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             with _active_lock:
                 ACTIVE.pop(sid, None)
+            _LAST_REPLY[sid] = dict(acc)
             try:
                 self.wfile.write(b"data: {\"type\":\"end\"}\n\n")
                 self.wfile.flush()
             except Exception:
                 pass
             config.log("chat.log", f"sid={sid} took={time.time()-t0:.1f}s len={len(text)}")
+
+    def _chat_collect(self, sid: str, text: str, history: list):
+        """非流式：跑一遍，把结果聚合成单个 JSON 返回（供不支持 SSE 的隧道使用）。"""
+        acc = {"reply": "", "reasoning": "", "sources": []}
+
+        def emit(ev: dict):
+            t = ev.get("type")
+            if t == "token":
+                acc["reply"] += ev.get("text", "")
+            elif t == "thinking" and ev.get("state") == "end":
+                acc["reasoning"] = ev.get("text", "")
+            elif t == "sources":
+                acc["sources"] = ev.get("sources", [])
+
+        runner = agent.Runner(emit)
+        with _active_lock:
+            ACTIVE[sid] = runner
+        t0 = time.time()
+        try:
+            runner.run(sid, text, history)
+        except Exception as e:
+            config.log("error.log", f"chat_collect: {type(e).__name__} {e}")
+        finally:
+            with _active_lock:
+                ACTIVE.pop(sid, None)
+            _LAST_REPLY[sid] = dict(acc)
+            config.log("chat.log", f"sid={sid} collect took={time.time()-t0:.1f}s")
+        self._json({"ok": True, "session_id": sid, "reply": acc["reply"],
+                    "reasoning": acc["reasoning"], "sources": acc["sources"]})
 
 
 # ---------------------------------------------------------------- Guard IPC

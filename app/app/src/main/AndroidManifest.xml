@@ -27,6 +27,16 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 深链接：桌面端「手机」面板渲染的二维码内容形如
+                 lumentunnel://relay?addr=<中继地址>&k=<中继密钥>
+                 手机相机扫一下就能唤起本 APP 并自动填好地址与密钥，
+                 不用手打长地址，也不依赖任何在线地址簿。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="lumentunnel" android:host="relay" />
+            </intent-filter>
         </activity>
 
         <service

@@ -687,6 +687,7 @@ function openDrawer(tab) {
       if (S.drawer === 'phone') { renderDrawer(); }
     }).catch(() => {});
     loadFirewall();
+    loadRelayInfo();
   }
 }
 
@@ -729,7 +730,7 @@ function renderDrawer() {
   else if (S.drawer === 'guard') box.innerHTML = drawerGuard();
   else box.innerHTML = drawerAbout();
   bindDrawer();
-  if (S.drawer === 'phone') { paintQr(); loadFirewall(); showRelayState(); }
+  if (S.drawer === 'phone') { paintQr(); loadFirewall(); showRelayState(); loadRelayInfo(); }
 }
 
 async function showRelayState() {
@@ -792,6 +793,87 @@ function paintQr() {
     ctx.font = '13px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('二维码生成失败', canvas.width / 2, canvas.height / 2);
+  }
+}
+
+/* 中继公网地址二维码：手机相机扫一下即可把完整地址填进地址框，杜绝手输截断 */
+function paintRelayQr(url) {
+  const canvas = $('#relayQrCanvas');
+  const urlEl = $('#relayQrUrl');
+  if (urlEl) urlEl.textContent = url || '无可用地址';
+  if (!canvas) return;
+  if (!url || typeof qrcode === 'undefined') {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(255,255,255,.4)';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('无可用地址', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    const n = qr.getModuleCount();
+    const size = canvas.width;
+    const cell = Math.floor(size / n);
+    const off = Math.floor((size - cell * n) / 2);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#000000';
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (qr.isDark(r, c)) ctx.fillRect(off + c * cell, off + r * cell, cell, cell);
+      }
+    }
+  } catch (e) {
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'rgba(255,255,255,.4)';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('二维码生成失败', canvas.width / 2, canvas.height / 2);
+  }
+}
+
+/* 拉取当前中继公网地址 + 密钥，填进「手机端连接信息」区块 */
+async function loadRelayInfo() {
+  const box = $('#relayInfoBox');
+  if (!box) return;
+  try {
+    const r = await api('/api/relay/info');
+    S.relayInfo = r || { addresses: [], secret: '' };
+    const addrs = S.relayInfo.addresses || [];
+    const secret = S.relayInfo.secret || '';
+    const primary = addrs[0] || '';
+    // 深链接：手机相机扫这个码 → 直接唤起 APP 并自动填好地址与密钥。
+    // 公版不需要任何在线地址簿，也不会把任何人的地址写进安装包。
+    const deep = primary
+      ? 'lumentunnel://relay?addr=' + encodeURIComponent(primary) + '&k=' + encodeURIComponent(secret)
+      : '';
+    box.innerHTML =
+      (primary ? `
+      <div class="qr-box" id="relayQrBox">
+        <canvas id="relayQrCanvas" width="176" height="176"></canvas>
+        <div class="qr-side">
+          <div class="qr-url" id="relayQrUrl"></div>
+          <button class="btn sm" data-copytext="${esc(primary)}" style="margin-top:8px">复制地址</button>
+        </div>
+      </div>
+      <div class="note" style="margin-top:10px">用手机相机扫上面这个码，会直接打开 Lumen APP 并自动填好地址和密钥，不用手打。</div>` : '<div class="note">暂无可用的公网地址（隧道尚未就绪，请稍候）。</div>')
+      + addrs.map((a) => `<div class="url-box"><span>${esc(a)}</span><button class="btn sm" data-copytext="${esc(a)}" style="margin-left:auto">复制</button></div>`).join('')
+      + `<div class="field" style="margin-top:12px"><label>中继密钥（手机端密码）<span class="hint">密码框填这个</span></label>
+          <div class="url-box"><span>${esc(secret) || '（未配置）'}</span>${secret ? `<button class="btn sm" data-copytext="${esc(secret)}" style="margin-left:auto">复制密钥</button>` : ''}</div>
+        </div>`;
+    // 只给新插入的复制按钮绑事件，避免重复绑定其它区块
+    box.querySelectorAll('[data-copytext]').forEach((b) => b.addEventListener('click', () => {
+      navigator.clipboard.writeText(b.dataset.copytext);
+      toast('已复制', 'ok');
+    }));
+    if (deep) paintRelayQr(deep);
+  } catch (e) {
+    box.innerHTML = `<div class="note">获取失败：${esc(e.message)}</div>`;
   }
 }
 
@@ -869,8 +951,10 @@ function drawerSettings() {
     <div class="kv"><span>本机设备</span><b>${esc(S.account.device_name || '')}</b></div>
     <div class="field"><label>${S.account.default_password ? '当前仍是默认密码，建议修改' : '修改密码'}</label>
       <input type="password" id="f-pwd" placeholder="新密码" style="width:140px">
-      <button class="btn sm" id="btnSavePwd">保存</button></div>
-    ${S.account.default_password ? '<div class="card note warn">默认账号 <b>' + esc(S.account.username) + '</b>，默认密码 <b>lumen</b>。手机端首次连接请用这组凭据，登录后请立刻改密码。</div>' : ''}
+      <button class="btn sm" id="btnSavePwd">保存</button>
+      <button class="btn sm" id="btnRotatePwd" style="margin-left:8px">换一把随机密码</button></div>
+    <div id="rotatedPwd"></div>
+    ${S.account.default_password ? '<div class="card note warn">这是本机<b>初始密码</b>，每台机器都不一样：<b>' + esc(S.account.username || '') + '</b> / <b>' + esc(S.account.initial_password || '（老版本创建的账号，点上面「换一把随机密码」生成）') + '</b>。手机端首次登录用这组凭据，<b>请立刻改成自己的密码</b>。</div>' : ''}
   </div>`;
 }
 
@@ -909,6 +993,11 @@ function drawerPhone() {
       <button class="btn sm" id="btnRelayStatus">查看连接</button></div>
     <div id="relayState" class="note"></div>
     <div class="doc" style="margin-top:8px">手机端连接：用浏览器打开 <b>中继地址</b>，输入同一把密钥，即可跳转到 Lumen 手机端（数据只过你的中继，不落地第三方）。</div>
+  </div>
+
+  <div class="sec"><div class="sec-h">手机端连接信息（当前公网地址）</div>
+    <div class="note">免费公网隧道约每 50 分钟换一次地址。下面是<b>当前有效</b>的中继地址与密钥，手机端「跨网中继」里直接扫二维码、或点复制粘贴即可，不用手输长串、也不会被截断。换地址后重新打开此面板就会刷新。</div>
+    <div id="relayInfoBox"><div class="note">正在获取当前公网地址…</div></div>
   </div>
 
   <div class="sec"><div class="sec-h">配对</div>
@@ -1156,6 +1245,23 @@ function bindDrawer() {
       S.account = r.account;
       toast('密码已更新', 'ok');
       renderDrawer();
+    } catch (e) { toast(e.message, 'err'); }
+  });
+  on('btnRotatePwd', 'click', async () => {
+    try {
+      const r = await api('/api/account/rotate', {});
+      S.account = r.account || S.account;
+      const box = $('#rotatedPwd');
+      if (box) {
+        box.innerHTML = '<div class="url-box"><span>' + esc(r.password) + '</span>'
+          + '<button class="btn sm" data-copytext="' + esc(r.password) + '" style="margin-left:auto">复制</button></div>'
+          + '<div class="note">这是新的初始密码，手机端首次登录用它。用完请在上面改成你自己的密码。</div>';
+        box.querySelectorAll('[data-copytext]').forEach((b) => b.addEventListener('click', () => {
+          navigator.clipboard.writeText(b.dataset.copytext);
+          toast('已复制', 'ok');
+        }));
+      }
+      toast('已换成随机密码', 'ok');
     } catch (e) { toast(e.message, 'err'); }
   });
   on('btnPair', 'click', async () => {

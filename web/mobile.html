@@ -404,6 +404,12 @@ padding:9px 16px;border-radius:11px;font-size:13px;z-index:99;opacity:0;transiti
     <div class="pane" id="paneDevice">
       <div class="sect">当前设备</div>
       <div id="devList"></div>
+      <div class="card" style="margin-top:10px">
+        <div class="row"><div class="g"><b>主 AI 控制</b><span id="lumenCtlDesc">正在检查状态…</span></div></div>
+        <div class="hr"></div>
+        <button class="btn" id="btnWakeTop">启动主 AI</button>
+        <button class="btn ghost" id="btnStopTop" style="margin-top:8px;color:var(--red);display:none">关闭主 AI</button>
+      </div>
       <div class="sect">关于</div>
       <div class="card">
         <div class="note">Lumen 手机端只做三件事：发现你的电脑、看它的会话、在授权后控制它。
@@ -425,8 +431,7 @@ padding:9px 16px;border-radius:11px;font-size:13px;z-index:99;opacity:0;transiti
       <div id="wakeBox" style="display:none">
         <div class="card" style="border-color:rgba(228,183,124,.4)">
           <div class="row"><div class="g"><b>主 AI 未运行</b><span>电脑在线，但 Lumen 主程序已关闭</span></div></div>
-          <div class="note" style="margin:6px 0 10px">点下方按钮，由本机守护进程 LumenGuard 把它拉起来，稍候刷新即可远程控制 / 对话。</div>
-          <button class="btn" id="btnWake">唤醒主 AI</button>
+          <div class="note" style="margin:6px 0 10px">点上方「启动主 AI」按钮，由本机守护进程 LumenGuard 把它拉起来，稍候刷新即可远程控制 / 对话。</div>
         </div>
       </div>
       <button class="btn ghost" id="btnLogout" style="margin-top:8px">退出登录</button>
@@ -455,7 +460,15 @@ padding:9px 16px;border-radius:11px;font-size:13px;z-index:99;opacity:0;transiti
 (function(){
 'use strict';
 var BOOT = JSON.parse(document.getElementById('lumen-boot') ? '{}' : '{}');
+var QS = new URLSearchParams(location.search);
+// 令牌可以由 APP 用 ?t= 传进来：公网隧道换地址后 localStorage 是空的，
+// 但令牌本身还在（APP 原生那份），靠这一手就能自动续上，不用重新登录。
 var TOK = localStorage.getItem('lumen_tok') || '';
+var URL_TOK = QS.get('t');
+if(URL_TOK){ TOK = URL_TOK; try{ localStorage.setItem('lumen_tok', TOK); }catch(e){} }
+// 中继密钥：落地页输入过一次后就记在这里，换地址时能自动带上。
+var RELAY_K = localStorage.getItem('lumen_relay_k') || '';
+if(QS.get('k')){ RELAY_K = QS.get('k'); try{ localStorage.setItem('lumen_relay_k', RELAY_K); }catch(e){} }
 var $ = function(s){return document.querySelector(s)};
 var esc = function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])})};
 var S = {sessions:[], cur:null, msgs:[], authorized:false, sid:null, dragging:false, lumen_running:true};
@@ -618,11 +631,21 @@ $('#btnSend').onclick=function(){
   renderChat();
   startApprovalWatch();
   var h={'Content-Type':'application/json'}; if(TOK) h['Authorization']='Bearer '+TOK;
+  var gotToken=false;
   fetch('/api/chat',{method:'POST',headers:h,body:JSON.stringify({session_id:S.cur,message:t})}).then(function(res){
     var rd=res.body.getReader(), dec=new TextDecoder(), acc='', buf='';
     function pump(){
       rd.read().then(function(o){
-        if(o.done){ ai.content=buf; renderChat(); stopApprovalWatch(); return; }
+        if(o.done){
+          if(!gotToken && !buf.trim()){
+            // 流式被公网隧道(serveo 等)掐断：走兼容模式取回已生成结果
+            toast('流式被隧道截断，正在兼容模式取回回复…');
+            fallbackChat(S, ai, t);
+          } else {
+            ai.content=buf; renderChat(); stopApprovalWatch();
+          }
+          return;
+        }
         acc += dec.decode(o.value,{stream:true});
         var i;
         while((i=acc.indexOf('\n\n'))>=0){
@@ -630,7 +653,7 @@ $('#btnSend').onclick=function(){
           var line=ch.split('\n').filter(function(l){return l.indexOf('data: ')==0})[0];
           if(!line) continue;
           var ev; try{ev=JSON.parse(line.slice(6))}catch(e){continue}
-          if(ev.type==='token'){ buf+=ev.text; ai.content=buf; renderChat(); }
+          if(ev.type==='token'){ gotToken=true; buf+=ev.text; ai.content=buf; renderChat(); }
           else if(ev.type==='sources'){ ai.meta.sources=ev.sources; }
           else if(ev.type==='thinking'){
             if(ev.state==='start'){ ai.meta.thinking=true; renderChat(); }
@@ -644,6 +667,26 @@ $('#btnSend').onclick=function(){
     pump();
   }).catch(function(e){ toast('发送失败：'+e.message); stopApprovalWatch(); });
 };
+
+// 兼容模式：serveo 等隧道会掐断 SSE，先取回已生成结果（不重跑），失败再兜底跑一遍非流式
+function _fillReply(ai, r){
+  ai.content = r.reply||'';
+  if(r.reasoning) ai.meta.reasoning=r.reasoning;
+  if(r.sources) ai.meta.sources=r.sources;
+  renderChat();
+}
+function fallbackChat(S, ai, t){
+  api('/api/chat', {session_id:S.cur, message:t, stream:false, recover:true}).then(function(r){
+    if(r && r.ok && (r.reply||'').trim()){
+      ai.meta.recovered = true; _fillReply(ai, r); stopApprovalWatch(); return;
+    }
+    return api('/api/chat', {session_id:S.cur, message:t, stream:false}).then(function(r2){
+      if(r2 && r2.ok && (r2.reply||'').trim()){ _fillReply(ai, r2); }
+      else { ai.content='（未能获取回复，隧道可能不稳定，请稍后重试）'; renderChat(); }
+      stopApprovalWatch();
+    });
+  }).catch(function(e){ ai.content='（兼容模式失败：'+e.message+'）'; renderChat(); stopApprovalWatch(); });
+}
 
 
 /* ============================================================
@@ -814,16 +857,35 @@ $('#btnKb').onclick=function(){
 /* ---------------- 设备 ---------------- */
 function refreshWake(){
   var box=$('#wakeBox');
-  if(!box) return;
-  if(S.lumen_running){ box.style.display='none'; }
-  else { box.style.display='block'; }
+  if(box){ box.style.display = S.lumen_running ? 'none' : 'block'; }
+  var b=$('#btnWakeTop'), st=$('#btnStopTop'), d=$('#lumenCtlDesc');
+  if(!b) return;
+  var on=!!S.lumen_running;
+  b.textContent = on ? '重启主 AI' : '启动主 AI';
+  d.textContent = on ? '主 AI 正在运行，可随时重启（重启期间无法对话）' : '主 AI 已关闭，点下面按钮由 LumenGuard 拉起';
+  st.style.display = on ? '' : 'none';
 }
-$('#btnWake').onclick=function(){
-  var b=this; b.textContent='正在唤醒…'; b.disabled=true;
-  api('/api/guard',{action:'START'}).then(function(r){
-    toast(r && r.ok ? '已发送唤醒指令，稍候刷新' : '唤醒失败');
-    setTimeout(function(){ location.reload(); }, 3500);
-  }).catch(function(e){ toast('唤醒失败：'+e.message); b.textContent='唤醒主 AI'; b.disabled=false; });
+$('#btnWakeTop').onclick=function(){
+  var b=this, on=!!S.lumen_running;
+  if(on && !confirm('确定重启家里的主 AI 吗？重启约需 10~30 秒，期间无法对话。')) return;
+  b.disabled=true; b.textContent = on ? '正在重启…' : '正在启动…';
+  var go=function(){
+    api('/api/guard',{action:'START'}).then(function(r){
+      toast(r && r.ok ? '指令已发送，稍候自动刷新' : '启动失败');
+      setTimeout(function(){ location.reload(); }, on?5000:3500);
+    }).catch(function(e){ toast('启动失败：'+e.message); b.disabled=false; refreshWake(); });
+  };
+  if(on){
+    api('/api/guard',{action:'STOP'}).then(go).catch(function(e){ toast('停止失败：'+e.message); b.disabled=false; refreshWake(); });
+  } else { go(); }
+};
+$('#btnStopTop').onclick=function(){
+  if(!confirm('确定关闭家里的主 AI 吗？关闭后只能从手机再启动。')) return;
+  var b=this; b.disabled=true; b.textContent='正在关闭…';
+  api('/api/guard',{action:'STOP'}).then(function(r){
+    toast(r && r.ok ? '已关闭主 AI' : '关闭失败');
+    setTimeout(function(){ location.reload(); }, 2000);
+  }).catch(function(e){ toast('关闭失败：'+e.message); b.disabled=false; });
 };
 function loadDevices(){
   api('/api/devices').then(function(r){
@@ -940,7 +1002,35 @@ function resolveApproval(id, ok){
 }
 
 /* 自动登录 */
-if(TOK){ api('/api/devices').then(function(r){ syncNativeToken(); enter(r.self); }).catch(function(){ localStorage.removeItem('lumen_tok'); }); }
+if(TOK){ api('/api/devices').then(function(r){ syncNativeToken(); enter(r.self); }).catch(function(e){
+  // 注意：网络/隧道抖动时不要清掉令牌，否则等隧道恢复也登不上了
+  toast('暂时连不上，稍后自动重试');
+}); }
+
+/* ---------------- 隧道自动续期：发现新地址就自己切过去 ----------------
+   免费隧道每 60 分钟换一次地址。中继服务器里存着当前所有可用地址，
+   这里定期问一次，发现自己用的地址已经不在列表里（说明已换成新的了），
+   就带着令牌和密钥跳到新地址 —— 登录态不丢。
+   中继密钥不存在（直连模式）时这段自动跳过。 */
+function checkRelayAddr(){
+  if(!RELAY_K) return;
+  fetch('/relay/addresses?k='+encodeURIComponent(RELAY_K)).then(function(r){ return r.json(); }).then(function(d){
+    if(!d || !d.ok || !d.addresses || !d.addresses.length) return;
+    var here = location.origin.replace(/\/+$/,'');
+    for(var i=0;i<d.addresses.length;i++){
+      var u = (d.addresses[i].url||'').replace(/\/+$/,'');
+      if(u && u !== here){
+        var nx = u + '/?k=' + encodeURIComponent(RELAY_K) +
+                 '&next=' + encodeURIComponent('/m?t=' + encodeURIComponent(TOK));
+        toast('隧道已更新，正在自动切换…');
+        setTimeout(function(){ location.href = nx; }, 900);
+        return;
+      }
+    }
+  }).catch(function(){});
+}
+setInterval(checkRelayAddr, 25000);
+setTimeout(checkRelayAddr, 4000);
 })();
 </script>
 </body>

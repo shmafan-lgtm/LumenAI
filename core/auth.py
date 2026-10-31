@@ -104,13 +104,16 @@ def ensure_account() -> dict:
         if acc.get("username"):
             return acc
         salt = secrets.token_hex(16)
-        # 首次运行给一个默认口令，用户可在设置里改；界面上会提示
-        pwd = "lumen"
+        # 首次运行给一把**随机**口令。
+        # 以前是固定 "lumen"：公版发出去以后，所有人的机器都是同一套凭据，
+        # 谁猜到就能登进别人的电脑。现在每台机器各不相同，只有本机能看到。
+        pwd = _random_password()
         acc = {
             "username": default_username(),
             "salt": salt,
             "hash": _hash(pwd, salt),
             "default_password": True,
+            "initial_password": pwd,   # 仅在用户改密码之前保留，用于桌面端提示
             "device_name": socket.gethostname(),
             "device_id": secrets.token_hex(8),
             "created": time.time(),
@@ -119,24 +122,54 @@ def ensure_account() -> dict:
         return acc
 
 
+def _random_password() -> str:
+    """人可读、难猜的随机口令（去掉容易混淆的 0/O/1/l）。"""
+    import string
+    alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return "".join(secrets.choice(alphabet) for _ in range(12))
+
+
 def account_public() -> dict:
     acc = ensure_account()
-    return {
+    out = {
         "username": acc["username"],
         "device_name": acc.get("device_name") or socket.gethostname(),
         "device_id": acc.get("device_id"),
         "default_password": bool(acc.get("default_password")),
         "host_os": platform.system() + " " + platform.release(),
     }
+    # 只在用户还没改密码时，才把初始口令带给桌面界面（它要显示给本机用户）。
+    # 用户一旦设置新密码，这个字段立刻消失。
+    if out["default_password"] and acc.get("initial_password"):
+        out["initial_password"] = acc["initial_password"]
+    return out
 
 
 def set_password(password: str) -> dict:
     acc = ensure_account()
     salt = secrets.token_hex(16)
     acc.update({"salt": salt, "hash": _hash(password, salt), "default_password": False})
+    acc.pop("initial_password", None)   # 改完密码就不再保留明文
     with _lock:
         _write(ACCOUNT, acc)
     return account_public()
+
+
+def rotate_initial_password() -> dict:
+    """换一把随机强密码，返回明文给本机界面显示一次。
+
+    用途：公版发出去以后，默认口令（如 lumen）人人可猜。
+    用户点一下「换一把随机密码」，密码立刻变成 12 位随机串，
+    只有这台电脑的界面看得到（改密码前保存在 account.json，改完即清除）。
+    """
+    acc = ensure_account()
+    salt = secrets.token_hex(16)
+    pwd = _random_password()
+    acc.update({"salt": salt, "hash": _hash(pwd, salt),
+                "default_password": True, "initial_password": pwd})
+    with _lock:
+        _write(ACCOUNT, acc)
+    return {"ok": True, "password": pwd, "account": account_public()}
 
 
 def verify(username: str, password: str) -> bool:

@@ -10,8 +10,8 @@ android {
         applicationId "com.lumen.remote"
         minSdk 23
         targetSdk 34
-        versionCode 1
-        versionName "1.0.0"
+        versionCode 7
+        versionName "1.2.0"
         resConfigs "zh", "zh-rCN", "en"
     }
 

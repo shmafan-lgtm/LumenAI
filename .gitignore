@@ -57,3 +57,6 @@ web/assets/_verify_*.html
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ---- 隧道运行时产物（每次重建都会变，且含本机路径/地址）----
+tools/puburl.txt

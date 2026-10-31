@@ -33,7 +33,7 @@ import threading
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote, unquote
 
 try:
     import http.client as httplib
@@ -47,6 +47,7 @@ _QUEUE: list = []                 # 手机 → 设备 的待处理请求（FIFO�
 _WAITERS: dict = {}               # reqid -> {"event": Event, "result": None}
 _DEVICE = {"online": False, "last": 0.0, "key_ok": False}
 _SESSIONS: dict = {}              # session_id -> 过期时间
+_ADDRESSES: list = []             # 本机守护脚本上报的公网隧道地址（手机据此发现新地址）
 
 
 class Req:
@@ -163,6 +164,8 @@ class H(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/" or path == "/index.html":
             return self._landing()
+        if path == "/relay/addresses":
+            return self._addresses()
         if path.startswith("/relay/"):
             return self._relay(path)
         return self._tunnel("GET")
@@ -171,6 +174,8 @@ class H(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/relay/connect":
             return self._connect()
+        if path == "/relay/report":
+            return self._report()
         if path.startswith("/relay/"):
             return self._relay(path)
         return self._tunnel("POST")
@@ -190,10 +195,13 @@ class H(BaseHTTPRequestHandler):
     # -------------------------------------------------- 落地页（中继自有）
     def _landing(self):
         sid = self._cookie_sid()
+        qs = parse_qs(urlparse(self.path).query)
+        nxt = (qs.get("next") or [""])[0]
+        kauto = (qs.get("k") or [""])[0]
         if sid:
             # 已连接：跳转去手机端页面（走隧道到电脑）
             self.send_response(302)
-            self.send_header("Location", "/m")
+            self.send_header("Location", nxt or "/m")
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
@@ -212,13 +220,77 @@ h1{font-size:20px;margin:0 0 4px}p{color:#6B7280;font-size:13px;margin:0 0 20px}
 <input class="in" id="k" placeholder="中继密钥" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
 <button class="b" id="go">连接</button>
 <div class="note">连接后跳转到你的 Lumen 手机端（经加密隧道到你的电脑）。<br>这台中继只帮你穿过 NAT，不存储任何聊天或画面内容。</div></div>
-<script>document.getElementById('go').onclick=function(){var k=document.getElementById('k').value.trim();
+<script>var KAUTO=__K_AUTO__, NEXT=__NEXT__;
+document.getElementById('go').onclick=function(){var k=document.getElementById('k').value.trim();
 if(!k){return}var b=document.getElementById('go');b.disabled=true;b.textContent='连接中…';
-function tryConn(n){var fd='k='+encodeURIComponent(k);fetch('/relay/connect',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd}).then(function(r){return r.json()}).then(function(d){
-if(d.ok){location.href='/m'}else{if(n<=1){alert(d.error||'密钥错误')}else{tryConn(n-1)}}}).catch(function(){if(n<=1){alert('连接失败，请重试')}else{setTimeout(function(){tryConn(n-1)},700)}})}
-tryConn(3);}</script>
+function tryConn(n){var fd='k='+encodeURIComponent(k);fetch('/relay/connect',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd,credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){
+if(d.ok){try{localStorage.setItem('lumen_relay_k',k)}catch(e){}location.href=NEXT||'/m'}else{if(n<=1){alert(d.error||'密钥错误')}else{tryConn(n-1)}}}).catch(function(){if(n<=1){alert('连接失败，请重试')}else{setTimeout(function(){tryConn(n-1)},700)}})}
+tryConn(3);}
+if(KAUTO){document.getElementByById('k').value=KAUTO;tryConn(3);}</script>
 </body></html>"""
+        # 注入 next/k：APP 或浏览器带 ?k=密钥 进来时自动填好并自动连上，不用手输
+        html = (html.replace("__K_AUTO__", json.dumps(kauto))
+                    .replace("__NEXT__", json.dumps(nxt)))
         self._send(200, html, "text/html; charset=utf-8")
+
+    # -------------------------------------------------- 隧道地址中枢
+    def _addresses(self):
+        """手机用中继密钥来问：现在有哪些可用的公网隧道地址。
+
+        免费隧道每 60 分钟换一次地址，手机需要能自己发现新地址，
+        否则每次换地址都要用户手动改一次 APP 设置。
+        """
+        secret = ""
+        q = parse_qs(urlparse(self.path).query)
+        secret = (q.get("k") or [""])[0]
+        if not secret:
+            raw = _parse_body(self)
+            if raw:
+                txt = raw.decode("utf-8", "replace")
+                if txt.startswith("{"):
+                    try:
+                        secret = (json.loads(txt).get("k") or "")
+                    except Exception:
+                        secret = ""
+                else:
+                    for kv in txt.split("&"):
+                        if kv.startswith("k="):
+                            secret = unquote(kv[2:])
+        if not RELAY_SECRET or not hmac_eq(secret, RELAY_SECRET):
+            return self._json({"ok": False, "error": "密钥错误"}, 403)
+        with _LOCK:
+            addrs = [dict(a) for a in _ADDRESSES]
+        return self._json({"ok": True, "addresses": addrs})
+
+    def _report(self):
+        """本机守护脚本上报新的公网隧道地址（带 X-Relay-Key 鉴权）。"""
+        if not self._secret_ok():
+            return self._json({"ok": False, "error": "密钥错误"}, 403)
+        raw = _parse_body(self)
+        try:
+            obj = json.loads(raw.decode("utf-8", "replace")) if raw else {}
+        except Exception:
+            obj = {}
+        url = (obj.get("url") or "").strip()
+        if not url.startswith("http"):
+            return self._json({"ok": False, "error": "url 无效"}, 400)
+        entry = {"url": url, "port": obj.get("port") or 8772, "since": _now()}
+        with _LOCK:
+            for i in range(len(_ADDRESSES) - 1, -1, -1):
+                if _ADDRESSES[i].get("url") == url:
+                    _ADDRESSES.pop(i)
+            _ADDRESSES.append(entry)
+            # 清掉过期地址：免费隧道最长活 60 分钟，超过 90 分钟的一定是尸体。
+            # 不清的话手机会把一串死地址一起缓存下来，轮换后挨个去试、
+            # 每个都要等超时，白白拖慢自愈。
+            stale = _now() - 5400
+            for i in range(len(_ADDRESSES) - 1, -1, -1):
+                if (_ADDRESSES[i].get("since") or 0) < stale:
+                    _ADDRESSES.pop(i)
+            while len(_ADDRESSES) > 12:
+                _ADDRESSES.pop(0)
+            addrs = [dict(a) for a in _ADDRESSES]
+        return self._json({"ok": True, "addresses": addrs})
 
     # -------------------------------------------------- 手机连接（拿会话 Cookie）
     def _connect(self):
@@ -242,7 +314,10 @@ tryConn(3);}</script>
         sid = uuid.uuid4().hex
         with _LOCK:
             _SESSIONS[sid] = _now() + 86400
-        self._json({"ok": True, "sid": sid},
+            addrs = [a.get("url") for a in _ADDRESSES if a.get("url")]
+        # 把当前所有可用公网地址一并回给手机：手机只要成功连上一次，
+        # 就能把最新地址缓存下来，之后隧道轮换时无需再依赖外部地址簿（GitHub 在国内常被墙）。
+        self._json({"ok": True, "sid": sid, "addresses": addrs},
                    extra={"Set-Cookie": "lrsid=%s; Path=/; Max-Age=86400; SameSite=Lax" % sid})
 
     # -------------------------------------------------- 设备侧接口
@@ -267,6 +342,9 @@ tryConn(3);}</script>
     def _take(self):
         # 长轮询上限：真实设备端用默认（~280s）挂起，等待手机请求；
         # 自测可用 ?timeout= 缩短，避免空轮询卡住。
+        # 设备一接上长轮询就立刻算在线 —— 中继刚重启时不必等 25 秒的注册周期，
+        # 避免手机侧撞上「电脑当前不在线」的 503 空窗。
+        device_seen()
         q = urlparse(self.path).query
         try:
             to = float((parse_qs(q).get("timeout") or ["280"])[0])
@@ -355,6 +433,18 @@ tryConn(3);}</script>
     # -------------------------------------------------- 手机侧隧道
     def _tunnel(self, method):
         if RELAY_SECRET and not self._cookie_sid():
+            # 没有会话时，文档类请求（GET /m、/assets/*）应送回落地页去输入密钥，
+            # 而不是甩一段 JSON —— 否则 APP 的 WebView 里只会显示 {"ok": false, ...}。
+            # API 请求（/api/* 与非 GET）仍返回 403，让前端 JS 走正常鉴权分支。
+            p = urlparse(self.path).path
+            if method == "GET" and not p.startswith("/api/"):
+                raw_q = urlparse(self.path).query
+                nxt = p + (("?" + raw_q) if raw_q else "")
+                self.send_response(302)
+                self.send_header("Location", "/?next=" + quote(nxt))
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             return self._json({"ok": False, "error": "未连接中继，请先在首页输入密钥"}, 403)
         if not device_online():
             return self._json({"ok": False, "error": "电脑当前不在线（LumenGuard 未连接中继）"}, 503)

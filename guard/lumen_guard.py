@@ -169,7 +169,21 @@ def lumen_healthy() -> bool:
 
 
 def lumen_running() -> bool:
-    return lumen_healthy() or pid_alive(int(runtime().get("pid", 0) or 0))
+    # 以「端口是否真的在服务」为准。
+    # 以前是 lumen_healthy() or pid_alive(pid)：进程活着就算运行中，
+    # 于是「进程残留但没监听」的僵死实例会让「启动主 AI」永远返回 already，
+    # 按钮点了没反应。这里给刚启动的进程留 5 分钟加载模型的宽限，
+    # 超过就判定为僵死，按钮会真正把 Lumen 拉起来。
+    if lumen_healthy():
+        return True
+    d = runtime()
+    pid = int(d.get("pid", 0) or 0)
+    if not pid_alive(pid):
+        return False
+    started = float(d.get("guard_start_ts") or 0)
+    if started and (time.time() - started) < 300:
+        return True
+    return False
 
 
 def find_lumen_exe() -> list[str]:
@@ -201,6 +215,10 @@ class Guard:
         cmd = find_lumen_exe()
         if not cmd:
             return {"ok": False, "error": "找不到 Lumen.exe / main.py"}
+        # 远程/无桌面场景（手机唤醒、崩溃自拉）：强制无窗口模式，
+        # 否则无桌面会话下 main.py 尝试开浏览器窗口会立刻退出。
+        if cmd and str(cmd[-1]).endswith("main.py") and "--no-window" not in cmd:
+            cmd = list(cmd) + ["--no-window"]
         try:
             flags = 0
             if os.name == "nt":
