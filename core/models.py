@@ -81,7 +81,7 @@ TIERS: list[dict] = [
         "runtime_label": "内置 llama.cpp · 也可挂 Ollama / OpenAI 兼容端点",
         "model_file": "H1-Turbo-Q4_K_M.gguf",
         "model_files": ["H1-Turbo-Q4_K_M.gguf"],
-        "credit": "由「想念也是麻烦」制作",
+        "credit": "由是想念也是麻烦基于GPT模型大幅度修改并提升能力及智商",
         "show_source": False,
         "source": "",
         "notice": "licenses/H1-Turbo-NOTICE.txt",

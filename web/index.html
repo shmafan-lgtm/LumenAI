@@ -9,8 +9,57 @@
 <link rel="manifest" href="/app.webmanifest">
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/thinking.css">
+<style>
+  /* 开机视频遮罩：全屏、置顶、不可跳过，播完才露出客户端 */
+  #intro {
+    position: fixed; inset: 0; z-index: 99999;
+    background: #000; display: flex;
+    align-items: center; justify-content: center;
+    cursor: default;
+  }
+  #intro video {
+    width: 100%; height: 100%; object-fit: cover;
+    background: #000;
+  }
+  #intro .intro-mark {
+    position: absolute; left: 50%; bottom: 6%;
+    transform: translateX(-50%);
+    font: 600 15px/1 "Microsoft YaHei UI", sans-serif;
+    letter-spacing: .35em; color: rgba(255,255,255,.55);
+    user-select: none; pointer-events: none;
+  }
+</style>
 </head>
 <body>
+<!-- 开机视频：全屏不可跳过，播放完才进入客户端 -->
+<div id="intro">
+  <video id="introVid" src="/assets/lumen-boot.mp4" autoplay muted playsinline preload="auto"></video>
+  <div class="intro-mark">LUMEN</div>
+</div>
+<script>
+(function () {
+  var intro = document.getElementById('intro');
+  var vid = document.getElementById('introVid');
+  if (!intro || !vid) return;
+  function reveal() {
+    if (intro && intro.parentNode) intro.parentNode.removeChild(intro);
+  }
+  // 不可跳过：拦截遮罩上的全部交互
+  ['click', 'dblclick', 'contextmenu', 'keydown', 'keyup', 'mousedown',
+   'mouseup', 'touchstart', 'touchmove', 'wheel'].forEach(function (ev) {
+    intro.addEventListener(ev, function (e) { e.preventDefault(); e.stopPropagation(); }, true);
+  });
+  // 播放结束 -> 露出客户端
+  vid.addEventListener('ended', reveal);
+  // 视频出错 -> 不卡死，短暂延时后露出
+  vid.addEventListener('error', function () { setTimeout(reveal, 600); });
+  // 自动播放兜底（静音保证浏览器允许自动播放）
+  var p = vid.play();
+  if (p && p.catch) p.catch(function () {});
+  // 硬兜底：40s 内未结束则强制露出，避免异常黑屏卡死
+  setTimeout(function () { if (intro && intro.parentNode) reveal(); }, 40000);
+})();
+</script>
 <div id="boot" class="boot"><img class="boot-mark" src="/assets/logo.png" alt=""><div class="boot-text">Lumen 正在点亮…</div></div>
 
 <div class="app" id="app" hidden>

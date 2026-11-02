@@ -125,7 +125,8 @@ DEFAULT_SETTINGS = {
     "search": {
         "enabled": True,
         "mode": "low_confidence",   # low_confidence | always
-        "threshold": 60,
+        "threshold": 60,            # 低于此把握度触发一次联网检索
+        "refuse_threshold": 10,     # 最终把握度低于此值 → 坦诚拒答（说“不会”），绝不编造
         "searxng_url": "",
         "max_results": 6,
         "cache_hours": 24,

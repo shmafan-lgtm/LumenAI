@@ -1,11 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller 打包配置：Lumen-Setup.exe（安装向导）。
+"""PyInstaller 打包配置：Lumen-Setup.exe（精简分发版安装向导）。
+
+设计：安装包本身不含程序与权重，运行时从 GitHub Release / 镜像源按需下载，
+所以安装包只有几 MB。仅用标准库 + tkinter。
 
 用法：
-    # 1. 先打一份「不含权重」的程序包（权重由安装器联网下载）
-    set LUMEN_BUNDLE_MODEL=0
-    python -m PyInstaller --noconfirm --clean --distpath dist_inst --workpath build_inst build.spec
-    # 2. 再打安装器
     python -m PyInstaller --noconfirm --clean --distpath dist_setup --workpath build_setup installer/build_installer.spec
 
 产物：
@@ -17,26 +16,17 @@ import sys
 ROOT = os.path.abspath(os.getcwd())
 sys.path.insert(0, ROOT)
 
-# 程序 payload：不含权重的绿色版
-PAYLOAD = ""
-for _cand in ("dist_inst2", "dist_inst", "dist_v4", "dist_v3"):
-    _p = os.path.join(ROOT, _cand, "Lumen")
-    if os.path.isdir(_p):
-        PAYLOAD = _p
-        break
+# 不再内嵌 payload：安装器只负责「下载并装配」，保证体积小。
+datas = []
 
-datas = [
-    (os.path.join(ROOT, "installer", "main.py"), "installer"),
+hiddenimports = [
+    "tkinter",
+    "tkinter.ttk",
+    "tkinter.filedialog",
+    "tkinter.messagebox",
+    "zipfile",
+    "urllib.request",
 ]
-if os.path.isdir(PAYLOAD):
-    datas.append((PAYLOAD, "payload"))
-
-# 手机 APP 一起带上，装机时不用再联网
-apk_dir = os.path.join(ROOT, "release", "mobile")
-if os.path.isdir(apk_dir):
-    datas.append((apk_dir, os.path.join("payload", "mobile")))
-
-hiddenimports = []
 
 a = Analysis(
     [os.path.join(ROOT, "installer", "main.py")],

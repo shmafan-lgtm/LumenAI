@@ -872,6 +872,9 @@ function drawerPhone() {
   const ses = rm.session;
   const urls = lan.urls || [];
   return `
+  <div class="card note warn" style="border:2px solid #ff7a59;background:rgba(255,122,89,.12);color:#ffb499;text-align:center;padding:16px;font-size:18px;font-weight:800;letter-spacing:1px;margin-bottom:14px">
+    ⚠ 该功能还未开发成功，请等待 V1.0.1 版本发布
+  </div>
   <div class="sec"><div class="sec-h">局域网访问</div>
     <div class="field"><label>允许手机访问<span class="hint">关闭后只有本机可连</span></label>${sw(lan.enabled, 'lan_enabled')}</div>
     ${lan.enabled ? `
@@ -1006,7 +1009,7 @@ function drawerAbout() {
 
   <div class="sec"><div class="sec-h">这些模型是谁写的</div>
     <div class="doc"><ul>
-      <li><b>Lumen H1 Turbo</b>：由<b>「想念也是麻烦」制作</b>。</li>
+      <li><b>Lumen H1 Turbo</b>：由<b>想念也是麻烦基于GPT模型大幅度修改并提升能力及智商</b>。</li>
       <li><b>Lumen V1 Ultra / mini se / Core 3B</b>：由<b>「想念也是麻烦」修改并增强</b>。</li>
       <li>各档位的上游来源与许可证声明见 <b>licenses/</b> 目录（安装包内必须保留，不可删除）。</li>
       <li>「档位」是能力定位，「权重」才是真正跑起来的东西——界面显示的档位名与实际加载的权重永远一致。</li>

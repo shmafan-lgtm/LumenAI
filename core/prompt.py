@@ -140,6 +140,9 @@ def system_prompt(tier: dict, st: dict, ws: str, runtime_model: str = "",
         "<confidence>0-100 的整数，表示你对本次回答事实准确性的把握</confidence>",
         "<need_search>true 或 false，表示是否需要联网核实</need_search>",
         "遇到以下情况 confidence 必须低于 60：涉及最新版本/价格/新闻/人物近况、你不确定的具体数字、"
+        "以及任何你其实没把握、只是凭记忆猜测的问题。当你确实毫无可靠依据、纯靠猜时，"
+        "confidence 应当如实报到 0-10，并允许由上层「把握度过低」协议直接坦诚拒答（说“不会”），"
+        "绝不用不确定的内容伪装成确定答案。"
         "你不熟悉的库或 API、训练数据之后才发生的事。",
         "",
         f"## 联网搜索：{search_state}",
