@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumen AI · 下载</title>
+<style>
+  :root{
+    --bg:#0b0d12; --panel:#141821; --panel2:#1b2130;
+    --line:#252d3d; --fg:#e8ecf4; --dim:#96a0b4;
+    --accent:#5b8cff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%,#1a2338 0%,var(--bg) 55%) no-repeat,var(--bg);
+    color:var(--fg);min-height:100vh;
+    font-family:"Microsoft YaHei UI","PingFang SC","Segoe UI",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:880px;margin:0 auto;padding:64px 24px 80px}
+  header{text-align:center;margin-bottom:46px}
+  .logo{
+    width:76px;height:76px;margin:0 auto 22px;border-radius:20px;
+    background:linear-gradient(145deg,#28324a,#151b28);
+    border:1px solid #2f3a52;display:flex;align-items:center;justify-content:center;
+    font-size:34px;font-weight:700;
+    box-shadow:0 12px 40px rgba(91,140,255,.16);
+  }
+  h1{font-size:34px;font-weight:700;letter-spacing:.5px}
+  .sub{color:var(--dim);margin-top:10px;font-size:15px;line-height:1.7}
+  .badges{display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap}
+  .badge{font-size:12px;padding:5px 12px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--dim)}
+  .badge.ok{color:#5fd39a;border-color:#26543f;background:#12261c}
+
+  .card{
+    background:linear-gradient(180deg,var(--panel) 0%,#11151d 100%);
+    border:1px solid var(--line);border-radius:16px;padding:26px;margin-bottom:18px;
+    position:relative;overflow:hidden;
+  }
+  .card.primary{border-color:#31456e;box-shadow:0 0 0 1px rgba(91,140,255,.08),0 18px 50px rgba(0,0,0,.35)}
+  .tag{position:absolute;top:16px;right:18px;font-size:11px;letter-spacing:1px;color:#8fb0ff;background:#16233f;border:1px solid #2b3f66;padding:4px 10px;border-radius:6px}
+  h2{font-size:19px;font-weight:600;margin-bottom:6px}
+  .desc{color:var(--dim);font-size:14px;line-height:1.75;margin-bottom:18px}
+  .meta{display:flex;gap:18px;flex-wrap:wrap;color:var(--dim);font-size:13px;margin-bottom:20px}
+  .meta b{color:var(--fg);font-weight:600}
+  .dl{
+    display:inline-flex;align-items:center;gap:9px;text-decoration:none;
+    background:linear-gradient(135deg,var(--accent),#4a6fe0);color:#fff;
+    padding:13px 28px;border-radius:10px;font-size:15px;font-weight:600;
+    box-shadow:0 8px 24px rgba(91,140,255,.28);transition:transform .15s ease;
+  }
+  .dl:hover{transform:translateY(-1px)}
+  .note{
+    margin-top:18px;font-size:13px;color:#7d879c;line-height:1.85;
+    background:#10151d;border:1px solid #1e2532;border-left:3px solid var(--accent);
+    padding:13px 15px;border-radius:0 8px 8px 0;
+  }
+  .note b{color:#b9c6de}
+  .steps{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;margin-top:34px}
+  .steps h3{font-size:16px;margin-bottom:18px;font-weight:600}
+  ol{margin:0;padding-left:22px;color:var(--dim);font-size:14px;line-height:2.05}
+  ol b{color:var(--fg)}
+  footer{margin-top:42px;text-align:center;color:#5d6577;font-size:13px;line-height:1.9}
+  footer a{color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">L</div>
+    <h1>Lumen AI</h1>
+    <div class="sub">本地化 AI 桌面端 · 模型推理、文件读写、命令执行全部在你自己的电脑上完成</div>
+    <div class="badges">
+      <span class="badge ok">国内直连 · 不限速</span>
+      <span class="badge ok">断点续传</span>
+      <span class="badge">完全离线可用</span>
+      <span class="badge">v1.0.0</span>
+    </div>
+  </header>
+
+  <div class="card primary">
+    <span class="tag">推荐</span>
+    <h2>下载安装器</h2>
+    <div class="desc">
+      安装器只有几 MB，双击后选择安装位置、勾选需要的模型档位即可。
+      AI 主体程序由安装器在安装时自动获取，无需你手动下载或解压。
+    </div>
+    <div class="meta">
+      <span>大小 <b>10.3 MB</b></span>
+      <span>Windows <b>x64</b></span>
+      <span>含 <b>模型多选</b></span>
+      <span>含 <b>桌面快捷方式</b></span>
+    </div>
+    <a class="dl" href="./Lumen-Setup.exe" download>⬇ 下载安装器</a>
+    <div class="note">
+      下载后双击运行。Windows 若弹出「已保护你的电脑」，点<b>更多信息 → 仍要运行</b>。
+    </div>
+  </div>
+
+  <div class="steps">
+    <h3>使用步骤</h3>
+    <ol>
+      <li>下载 <b>Lumen-Setup.exe</b> 并双击运行。</li>
+      <li>选择安装位置，勾选需要的模型档位：
+        <br>· <b>Core 3B</b>（约 2.1 GB）— 任意机器可跑
+        <br>· <b>H1 Turbo</b>（约 10.8 GB）— 需 8 GB 显存
+        <br>· <b>mini se</b>（约 8.4 GB）— 需 12 GB 显存
+        <br>· <b>V1 Ultra</b>（约 6.0 GB）— 需 24 GB 显存
+      </li>
+      <li>点击「<b>开始安装</b>」，安装器会自动获取程序包与所选模型权重。</li>
+      <li>安装完成后，双击桌面的 <b>Lumen</b> 图标启动。</li>
+    </ol>
+  </div>
+
+  <footer>
+    Lumen AI v1.0.0 · 本地优先的 AI 工作台<br>
+    源码公开：<a href="https://github.com/shmafan-lgtm/LumenAI" target="_blank" rel="noopener">github.com/shmafan-lgtm/LumenAI</a>
+  </footer>
+</div>
+</body>
+</html>
