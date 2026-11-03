@@ -259,15 +259,16 @@ class SetupApp:
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title("%s 安装向导 · %s" % (APP_NAME, VERSION))
-        self.root.geometry("640x540")
-        self.root.resizable(False, False)
+        self.root.geometry("660x620")
+        self.root.minsize(560, 480)
+        self.root.resizable(True, True)
 
         self.target = _default_dir()
         self.opt_desktop = tk.BooleanVar(value=True)
         self.opt_guard = tk.BooleanVar(value=True)
-        self.opt_apk = tk.BooleanVar(value=True)
         self.model_vars = {m["id"]: tk.BooleanVar(value=bool(m["recommend"]))
                            for m in MODEL_CATALOG}
+        self._wheel_func = None
 
         self.container = ttk.Frame(self.root, padding=24)
         self.container.pack(fill="both", expand=True)
@@ -276,19 +277,66 @@ class SetupApp:
         self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
 
     def _clear(self) -> None:
+        if self._wheel_func is not None:
+            try:
+                self.root.unbind_all("<MouseWheel>", self._wheel_func)
+            except Exception:
+                pass
+            self._wheel_func = None
         for w in self.container.winfo_children():
             w.destroy()
 
+    def _on_wheel(self, event) -> None:
+        """内容区滚动。"""
+        canvas = getattr(self, "_canvas", None)
+        if canvas is None:
+            return
+        if event.delta:
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
     def _page_welcome(self) -> None:
         self._clear()
-        ttk.Label(self.container, text=APP_NAME,
+
+        # ---- 底部固定操作条（先 pack，始终贴在窗口底部，不会被内容挤出去）
+        bar = ttk.Frame(self.container)
+        bar.pack(side="bottom", fill="x", pady=(12, 0))
+        self.hint = ttk.Label(bar, text="", foreground="#a33")
+        self.hint.pack(side="left")
+        ttk.Button(bar, text="开始安装", command=self._start,
+                   width=16).pack(side="right")
+
+        # ---- 中间可滚动内容区
+        wrap = ttk.Frame(self.container)
+        wrap.pack(side="top", fill="both", expand=True)
+        canvas = tk.Canvas(wrap, highlightthickness=0, bd=0)
+        vbar = ttk.Scrollbar(wrap, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vbar.set)
+        vbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        self._canvas = canvas
+
+        body = ttk.Frame(canvas)
+        win_id = canvas.create_window((0, 0), window=body, anchor="nw")
+
+        def _on_body_configure(_e=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _on_canvas_configure(e):
+            canvas.itemconfigure(win_id, width=e.width)
+
+        body.bind("<Configure>", _on_body_configure)
+        canvas.bind("<Configure>", _on_canvas_configure)
+        self._wheel_func = self._on_wheel
+        self.root.bind_all("<MouseWheel>", self._wheel_func)
+
+        ttk.Label(body, text=APP_NAME,
                   font=("Microsoft YaHei UI", 22, "bold")).pack(anchor="w")
-        ttk.Label(self.container,
+        ttk.Label(body,
                   text="本地化 AI 桌面端 · 模型推理、文件读写、命令执行全部在这台电脑上完成",
                   font=("Microsoft YaHei UI", 10)).pack(anchor="w", pady=(4, 14))
 
-        ttk.Label(self.container, text="安装位置").pack(anchor="w")
-        row = ttk.Frame(self.container)
+        ttk.Label(body, text="安装位置").pack(anchor="w")
+        row = ttk.Frame(body)
         row.pack(fill="x", pady=(4, 10))
         self.dir_entry = ttk.Entry(row)
         self.dir_entry.insert(0, self.target)
@@ -296,7 +344,7 @@ class SetupApp:
         ttk.Button(row, text="浏览…", command=self._pick_dir).pack(side="left", padx=(8, 0))
 
         # 模型选择
-        box = ttk.LabelFrame(self.container, text="选择要下载的模型（可多选，避免多余下载占用空间）",
+        box = ttk.LabelFrame(body, text="选择要下载的模型（可多选，避免多余下载占用空间）",
                              padding=10)
         box.pack(fill="x", pady=(6, 8))
         total_gb = 0.0
@@ -313,18 +361,11 @@ class SetupApp:
         self.model_size_label.pack(anchor="w", pady=(4, 0))
         self._update_size()
 
-        cbox = ttk.LabelFrame(self.container, text="其它组件", padding=10)
+        cbox = ttk.LabelFrame(body, text="其它组件", padding=10)
         cbox.pack(fill="x", pady=(0, 8))
         ttk.Checkbutton(cbox, text="创建桌面快捷方式", variable=self.opt_desktop).pack(anchor="w")
         ttk.Checkbutton(cbox, text="安装 LumenGuard（开机自启，异常退出自动拉起）",
                         variable=self.opt_guard).pack(anchor="w")
-        ttk.Checkbutton(cbox, text="下载手机端 APP（APK）", variable=self.opt_apk).pack(anchor="w")
-
-        self.hint = ttk.Label(self.container, text="", foreground="#a33")
-        self.hint.pack(anchor="w")
-
-        ttk.Button(self.container, text="开始安装", command=self._start,
-                   width=16).pack(anchor="e", pady=(10, 0))
 
         # 勾选变化时刷新体积
         for v in self.model_vars.values():
@@ -398,10 +439,7 @@ class SetupApp:
                              icon=icon, desc="本地化 AI 桌面端")
                 self._set(62, "快捷方式已创建")
 
-            if self.opt_apk.get():
-                self._set(66, "下载手机端 APP…")
-                self._download_apk(target)
-            self._set(72, "手机端 APP 已就绪" if self.opt_apk.get() else "")
+            self._set(72, "组件就绪")
 
             selected = [m for m in MODEL_CATALOG if self.model_vars[m["id"]].get()]
             if selected:
@@ -466,17 +504,6 @@ class SetupApp:
         except OSError:
             return False
         return True
-
-    def _download_apk(self, target: str) -> None:
-        out_dir = os.path.join(target, "mobile")
-        os.makedirs(out_dir, exist_ok=True)
-        dest = os.path.join(out_dir, "Lumen-Android.apk")
-        if os.path.isfile(dest) and os.path.getsize(dest) > 100000:
-            return
-        url = _release_asset_url("Lumen-Android.apk")
-        if url:
-            _http_get(url, dest, lambda d, t, s: self._set(
-                66 + int(5 * d / max(t, 1)), "下载手机端 APP… %s" % _human(d)))
 
     def _download_models(self, target: str, selected: list) -> None:
         models_dir = os.path.join(target, "models")
