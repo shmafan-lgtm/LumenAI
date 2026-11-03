@@ -36,6 +36,17 @@ VERSION = "1.0.0"
 GITHUB_REPO = os.environ.get("LUMEN_GITHUB_REPO", "shmafan-lgtm/LumenAI").strip()
 GITHUB_API = "https://api.github.com/repos/{repo}/releases/latest"
 
+# ---------------------------------------------------------------- 受控主体端点
+# 仿 Visual Studio Installer：对外只发引导器（安装器本体），
+# AI 主体程序不在公开页面暴露直链，必须由安装器带令牌取回。
+# 令牌明文内置在安装器里，服务端只存 sha256 摘要做比对。
+CORE_ENDPOINT = os.environ.get(
+    "LUMEN_CORE_ENDPOINT",
+    "https://lumen-ai-download.app.workbuddy.host/core?sharecode=DYLEWJHSOL").strip()
+CORE_TOKEN = os.environ.get(
+    "LUMEN_CORE_TOKEN",
+    "koCVPXeGIgAoUXJq7QTrjb6JN1xjEx3t36rmuJdY894").strip()
+
 # 程序包在 GitHub Release 上的资产名（按顺序尝试）
 APP_ASSET_CANDIDATES = ["Lumen-Portable.zip", "Lumen-Portable.exe",
                         "Lumen-win.zip", "Lumen.exe"]
@@ -125,7 +136,8 @@ def _mk_shortcut(shortcut_path: str, target: str, args: str = "",
         return False
 
 
-def _http_get(url: str, dest: str, on_progress=None, timeout: int = 60) -> bool:
+def _http_get(url: str, dest: str, on_progress=None, timeout: int = 60,
+              headers: dict | None = None) -> bool:
     """下载到 dest（自动续传），带进度回调。失败返回 False。"""
     tmp = dest + ".part"
     have = 0
@@ -135,10 +147,12 @@ def _http_get(url: str, dest: str, on_progress=None, timeout: int = 60) -> bool:
         except OSError:
             have = 0
     try:
-        headers = {"User-Agent": "Lumen-Setup"}
+        hdrs = {"User-Agent": "Lumen-Setup"}
+        if headers:
+            hdrs.update(headers)
         if have:
-            headers["Range"] = "bytes=%d-" % have
-        req = urllib.request.Request(url, headers=headers)
+            hdrs["Range"] = "bytes=%d-" % have
+        req = urllib.request.Request(url, headers=hdrs)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         with opener.open(req, timeout=timeout) as r:
             code = getattr(r, "status", 200)
@@ -178,6 +192,15 @@ def _http_get(url: str, dest: str, on_progress=None, timeout: int = 60) -> bool:
         return True
     except Exception:
         return False
+
+
+def _http_get_core(dest: str, on_progress=None, timeout: int = 60) -> bool:
+    """从受控端点拉取 AI 主体（带令牌）。
+
+    主体端点要求 X-Lumen-Token 头；令牌由安装器内置。
+    """
+    return _http_get(CORE_ENDPOINT, dest, on_progress, timeout,
+                     headers={"X-Lumen-Token": CORE_TOKEN})
 
 
 def _human(n: float) -> str:
@@ -483,11 +506,27 @@ class SetupApp:
                     return True
                 except OSError:
                     pass
-        # 2) 否则从 GitHub Release 拉取
+        # 2) 受控端点（首选）：AI 主体不在公开页面暴露，由安装器带令牌取回
+        dest = os.path.join(target, "_app_dl.tmp")
+        if CORE_ENDPOINT:
+            self._set(8, "正在获取 Lumen 程序包…")
+            if _http_get_core(dest, lambda d, t, s: self._set(
+                    5 + int(35 * d / max(t, 1)),
+                    "下载 Lumen 程序包… %s / %s" % (_human(d), _human(t)))):
+                if _extract_zip(dest, target):
+                    try:
+                        os.remove(dest)
+                    except OSError:
+                        pass
+                    return True
+            try:
+                os.remove(dest)
+            except OSError:
+                pass
+        # 3) 兜底：从 GitHub Release 拉取
         url = _release_asset_url(APP_ASSET_CANDIDATES)
         if not url:
             return False
-        dest = os.path.join(target, "_app_dl.tmp")
         if not _http_get(url, dest, lambda d, t, s: self._set(
                 5 + int(35 * d / max(t, 1)), "下载 Lumen 程序包… %s" % _human(d))):
             return False
