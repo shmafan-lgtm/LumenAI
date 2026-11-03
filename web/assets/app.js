@@ -1430,9 +1430,17 @@ function bind() {
 }
 
 /* ---------------------------------------------------------------- 启动 */
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(
+      () => rej(new Error((label || '请求') + '超时（' + (ms / 1000) + '秒）')), ms)),
+  ]);
+}
+
 async function init() {
   try {
-    const b = await api('/api/bootstrap');
+    const b = await withTimeout(api('/api/bootstrap'), 20000, '初始化');
     Object.assign(S, {
       sessions: b.sessions || [], tiers: b.tiers || [], hw: b.hardware || {},
       engine: b.engine || {}, settings: b.settings || {}, account: b.account || {},
@@ -1452,7 +1460,11 @@ async function init() {
     }
     if (b.sessions && b.sessions.length) openSession(b.sessions[0].id);
   } catch (e) {
-    toast('初始化失败：' + e.message, 'err');
+    // 后端未就绪也不能把用户卡在「正在点亮」——先进界面，再提示
+    toast('初始化失败：' + e.message + '（后端可能未就绪，可稍后重试）', 'err');
+    try {
+      $('#composerTip').textContent = '后端未就绪 · 后端启动后可正常使用';
+    } catch (e2) {}
   } finally {
     $('#boot').style.display = 'none';
     $('#app').hidden = false;

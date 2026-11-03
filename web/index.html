@@ -41,7 +41,10 @@
   var intro = document.getElementById('intro');
   var vid = document.getElementById('introVid');
   if (!intro || !vid) return;
+  var revealed = false;
   function reveal() {
+    if (revealed) return;
+    revealed = true;
     if (intro && intro.parentNode) intro.parentNode.removeChild(intro);
   }
   // 不可跳过：拦截遮罩上的全部交互
@@ -53,11 +56,50 @@
   vid.addEventListener('ended', reveal);
   // 视频出错 -> 不卡死，短暂延时后露出
   vid.addEventListener('error', function () { setTimeout(reveal, 600); });
-  // 自动播放兜底（静音保证浏览器允许自动播放）
-  var p = vid.play();
-  if (p && p.catch) p.catch(function () {});
-  // 硬兜底：40s 内未结束则强制露出，避免异常黑屏卡死
-  setTimeout(function () { if (intro && intro.parentNode) reveal(); }, 40000);
+
+  // 自动播放：Edge/Chromium 对未静音的视频会拒绝 autoplay。
+  // 这里强制 muted + playsinline，并主动调 play()；被拒时用
+  // load() 后重试，再不行就静音后重试，最后才走兜底。
+  function tryPlay(attempt) {
+    vid.muted = true;
+    vid.defaultMuted = true;
+    vid.setAttribute('muted', '');
+    vid.setAttribute('playsinline', '');
+    vid.setAttribute('webkit-playsinline', '');
+    var p;
+    try {
+      p = vid.play();
+    } catch (e) {
+      scheduleRetry(attempt);
+      return;
+    }
+    if (p && p.catch) {
+      p.catch(function () {
+        if (attempt === 0) {
+          try { vid.load(); } catch (e2) {}
+          scheduleRetry(1);
+        } else if (attempt === 1) {
+          vid.muted = true;
+          try { p = vid.play(); } catch (e3) {}
+          if (p && p.catch) p.catch(function () { scheduleRetry(2); });
+          else scheduleRetry(2);
+        } else {
+          scheduleRetry(2);
+        }
+      });
+    }
+  }
+  function scheduleRetry(attempt) {
+    if (attempt >= 3) { setTimeout(reveal, 800); return; }
+    setTimeout(function () { tryPlay(attempt + 1); }, 350);
+  }
+  // 数据就绪即尝试播放，避免 preload 卡住
+  ['loadeddata', 'canplay', 'canplaythrough', 'loadedmetadata'].forEach(function (ev) {
+    vid.addEventListener(ev, function () { tryPlay(0); });
+  });
+  tryPlay(0);
+  // 硬兜底：18s 内未结束则强制露出，避免异常黑屏卡死
+  setTimeout(reveal, 18000);
 })();
 </script>
 <div id="boot" class="boot"><img class="boot-mark" src="/assets/logo.png" alt=""><div class="boot-text">Lumen 正在点亮…</div></div>
