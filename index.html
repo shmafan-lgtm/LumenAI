@@ -51,13 +51,12 @@
     box-shadow:0 8px 24px rgba(91,140,255,.28);transition:transform .15s ease;
   }
   .dl:hover{transform:translateY(-1px)}
-  .dl[disabled]{opacity:.6;cursor:progress;transform:none}
   .dl.ghost{
     background:transparent;border:1px solid var(--line);color:var(--fg);box-shadow:none;
   }
   .dl.ghost:hover{border-color:var(--accent)}
   .alt{margin-top:14px;font-size:13px;color:var(--dim)}
-  .alt a{color:var(--accent2,#7aa2ff);text-decoration:none}
+  .alt a{color:#7aa2ff;text-decoration:none}
   .alt a:hover{text-decoration:underline}
   .note{
     margin-top:18px;font-size:13px;color:#7d879c;line-height:1.85;
@@ -71,11 +70,6 @@
   ol b{color:var(--fg)}
   footer{margin-top:42px;text-align:center;color:#5d6577;font-size:13px;line-height:1.9}
   footer a{color:var(--dim)}
-  .prog{height:4px;background:#1b2130;border-radius:99px;overflow:hidden;margin-top:14px;display:none}
-  .prog.on{display:block}
-  .prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,#5b8cff,#7aa2ff);transition:width .25s}
-  #dlStatus{font-size:13px;color:var(--dim);margin-top:10px;display:none}
-  #dlStatus.on{display:block}
 </style>
 </head>
 <body>
@@ -85,9 +79,9 @@
     <h1>Lumen AI</h1>
     <div class="sub">本地化 AI 桌面端 · 模型推理、文件读写、命令执行全部在你自己的电脑上完成</div>
     <div class="badges">
-      <span class="badge ok">国内直连 · 不限速</span>
-      <span class="badge ok">断点续传</span>
-      <span class="badge">完全离线可用</span>
+      <span class="badge ok">官方安装器</span>
+      <span class="badge ok">程序已内置</span>
+      <span class="badge">Windows x64</span>
       <span class="badge">v1.0.0</span>
     </div>
   </header>
@@ -96,19 +90,16 @@
     <span class="tag">推荐</span>
     <h2>下载安装器</h2>
     <div class="desc">
-      安装器只有几 MB，双击后选择安装位置、勾选需要的模型档位即可。
-      AI 主体程序由安装器在安装时自动获取，无需你手动下载或解压。
+      安装器为单文件、自包含，已把 AI 主体程序一并打包在内（约 74 MB）。
+      双击后选择安装位置、勾选需要的模型档位即可，无需单独下载任何程序包。
     </div>
     <div class="meta">
-      <span>大小 <b>10.3 MB</b></span>
+      <span>大小 <b>约 74 MB</b></span>
       <span>Windows <b>x64</b></span>
       <span>含 <b>模型多选</b></span>
       <span>含 <b>桌面快捷方式</b></span>
     </div>
-    <button class="dl" id="btnDl">⬇ 下载安装器</button>
-    <div class="prog" id="prog"><i id="progBar"></i></div>
-    <div id="dlStatus"></div>
-    <div class="alt">下载太慢？改用 <a href="./Lumen-Setup.exe" download>本站直链</a></div>
+    <a class="dl" href="./Lumen-Setup.exe" download>⬇ 下载安装器</a>
     <div class="note">
       下载后双击运行。Windows 若弹出「已保护你的电脑」，点<b>更多信息 → 仍要运行</b>。
     </div>
@@ -124,83 +115,14 @@
         <br>· <b>mini se</b>（约 8.4 GB）— 需 12 GB 显存
         <br>· <b>V1 Ultra</b>（约 6.0 GB）— 需 24 GB 显存
       </li>
-      <li>点击「<b>开始安装</b>」，安装器会自动获取程序包与所选模型权重。</li>
+      <li>点击「<b>开始安装</b>」，安装器解包内置程序并下载所选模型权重。</li>
       <li>安装完成后，双击桌面的 <b>Lumen</b> 图标启动。</li>
     </ol>
   </div>
 
   <footer>
-    Lumen AI v1.0.0 · 本地优先的 AI 工作台<br>
-    源码公开：<a href="https://github.com/shmafan-lgtm/LumenAI" target="_blank" rel="noopener">github.com/shmafan-lgtm/LumenAI</a>
+    Lumen AI v1.0.0 · 本地优先的 AI 工作台
   </footer>
 </div>
-
-<script>
-/* 从高速分发服务拉取安装器再触发本地下载。
-   用户的地址栏始终停在官网域名，看不到后端地址。 */
-(function () {
-  // 后端地址用 base64 存放，页面源码里不出现任何主机名片段
-  var B64 = 'bHVtZW4tYWktZG93bmxvYWQuYXBwLndvcmtidWRkeS5ob3N0';
-  var HOST = (function (s) {
-    var bin = atob(s), out = '', i = 0;
-    while (i < bin.length) {
-      var c = bin.charCodeAt(i++);
-      out += String.fromCharCode(c);
-    }
-    return out;
-  })(B64);
-  var URL = 'https://' + HOST + '/Lumen-Setup.exe?sharecode=DYLEWJHSOL';
-  var btn = document.getElementById('btnDl');
-  var prog = document.getElementById('prog');
-  var bar = document.getElementById('progBar');
-  var st = document.getElementById('dlStatus');
-  if (!btn) return;
-
-  btn.addEventListener('click', function () {
-    btn.disabled = true;
-    prog.classList.add('on');
-    st.classList.add('on');
-    st.textContent = '正在连接高速下载源…';
-
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', URL, true);
-    xhr.responseType = 'blob';
-    xhr.onprogress = function (e) {
-      if (!e.lengthComputable) return;
-      var pct = Math.round(e.loaded * 100 / e.total);
-      bar.style.width = pct + '%';
-      st.textContent = '下载中… ' + pct + '%  (' +
-        (e.loaded / 1048576).toFixed(1) + ' / ' + (e.total / 1048576).toFixed(1) + ' MB)';
-    };
-    xhr.onload = function () {
-      if (xhr.status !== 200) {
-        st.textContent = '高速源暂时不可用（' + xhr.status + '），正在回退到本站直链…';
-        btn.disabled = false;
-        prog.classList.remove('on');
-        st.classList.remove('on');
-        setTimeout(function () { location.href = './Lumen-Setup.exe'; }, 900);
-        return;
-      }
-      st.textContent = '下载完成，正在保存…';
-      var blob = new Blob([xhr.response], { type: 'application/x-msdownload' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'Lumen-Setup.exe';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(function () { URL.revokeObjectURL(a.href); }, 30000);
-      st.textContent = '✓ 已开始下载 Lumen-Setup.exe';
-      btn.disabled = false;
-    };
-    xhr.onerror = function () {
-      st.textContent = '网络异常，正在回退到本站直链…';
-      btn.disabled = false;
-      setTimeout(function () { location.href = './Lumen-Setup.exe'; }, 900);
-    };
-    xhr.send();
-  });
-})();
-</script>
 </body>
 </html>
