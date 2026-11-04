@@ -25,6 +25,8 @@ import threading
 import time
 import urllib.request
 import zipfile
+import lzma  # noqa: F401 确保 PyInstaller 打包 _lzma 扩展
+import tarfile
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -32,9 +34,9 @@ from tkinter import filedialog, messagebox, ttk
 APP_NAME = "Lumen"
 VERSION = "1.0.0"
 
-# 程序主体（Lumen-Portable.zip）随安装器一起打包为内部数据，
-# 运行时从 sys._MEIPASS 读取，对外不存在任何下载直链。
-PAYLOAD_INTERNAL = "payload/Lumen-Portable.zip"
+# 程序主体（Lumen-Portable.tar.xz，xz 高压缩约 36MB）随安装器一起打包为内部数据，
+# 运行时从 sys._MEIPASS 读取并解包，对外不存在任何下载直链。
+PAYLOAD_INTERNAL = "payload/Lumen-Portable.tar.xz"
 
 # 模型档位：安装器可下载的权重（走 hf-mirror 直链，断点续传）。
 # 注意：权重当年没推上 GitHub，走镜像源才是真能下到的地方。
@@ -185,6 +187,30 @@ def _human(n: float) -> str:
             return "%.1f %s" % (n, unit)
         n /= 1024.0
     return "%.1f GB" % n
+
+
+def _extract_tarxz(xz_path: str, dest: str) -> bool:
+    """解包内置 .tar.xz 主体（xz 高压缩，下载包仅约 36MB，解包后约 160MB）。"""
+    try:
+        os.makedirs(dest, exist_ok=True)
+        with tarfile.open(xz_path, "r:xz") as tar:
+            for m in tar.getmembers():
+                if not m.name or m.name.startswith("/") or ".." in m.name:
+                    continue
+                out = os.path.join(dest, m.name)
+                if m.isdir():
+                    os.makedirs(out, exist_ok=True)
+                    continue
+                os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+                with tar.extractfile(m) as src, open(out, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                try:
+                    os.chmod(out, 0o644)
+                except OSError:
+                    pass
+        return True
+    except Exception:
+        return False
 
 
 def _extract_zip(zip_path: str, dest: str) -> bool:
@@ -382,7 +408,7 @@ class SetupApp:
         target = self.target
         try:
             os.makedirs(target, exist_ok=True)
-            self._set(5, "解包内置 Lumen 程序（约 120 MB）…")
+            self._set(5, "解包内置 Lumen 程序（下载包约 37 MB，解包后约 160 MB）…")
             if not self._download_app(target):
                 self._set(100, "内置程序包解包失败")
                 self.root.after(0, self._page_error,
@@ -437,8 +463,8 @@ class SetupApp:
         """
         here = os.path.dirname(os.path.abspath(sys.executable))
         cands = [
-            "Lumen-Portable.zip", "Lumen-Portable.exe", "Lumen-win.zip",
-            "payload/Lumen-Portable.zip", "payload/Lumen-Portable.exe",
+            "Lumen-Portable.tar.xz", "Lumen-Portable.zip", "Lumen-Portable.exe",
+            "payload/Lumen-Portable.tar.xz", "payload/Lumen-Portable.zip",
         ]
         for c in cands:
             p = os.path.join(here, c)
@@ -451,11 +477,13 @@ class SetupApp:
         internal = self._bundled_payload()
         if internal:
             self._set(12, "解包内置 Lumen 程序…")
-            return _extract_zip(internal, target)
+            return _extract_tarxz(internal, target)
         # 2) 同目录自带程序包（离线分发 / 内网部署场景）
         local = self._local_app_payload()
         if local:
             self._set(12, "使用本地自带程序包…")
+            if local.lower().endswith(".tar.xz"):
+                return _extract_tarxz(local, target)
             if local.lower().endswith(".zip"):
                 return _extract_zip(local, target)
             try:
