@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
-"""Lumen 安装向导（精简分发版）。
+"""Lumen 安装向导（自包含版）。
 
-定位：用户从 GitHub Releases 下载 `Lumen-Setup.exe`（仅几 MB），双击后：
+定位：用户下载一个 `Lumen-Setup.exe`（单文件、自包含），双击后：
   1. 选安装目录（默认 %LOCALAPPDATA%\\Programs\\Lumen）
   2. 勾选要下载的模型（Core 3B / H1 Turbo / mini se / V1 Ultra），
      各档标注体积与显存门槛，用户按需勾选，避免把用不到的大模型一起下载。
-  3. 安装器从 GitHub Release 拉取 Lumen 程序包，再从镜像源拉取所选模型权重
+  3. 安装器把内置的 Lumen 程序包解压到目标目录，再从镜像源拉取所选模型权重
   4. 完成
 
 设计约束：
-  * 安装包本身不含程序与权重（太大），运行时按需下载 —— 「用安装包去下载
-    网站上的东西」的意思。所以安装包装出来只有几 MB。
+  * Lumen 程序主体（Lumen.exe + _internal + 运行时）已随安装器一体打包，
+    安装时直接从安装器内部解包，不对外暴露任何下载直链。
+  * 模型权重较大且可独立选择，仍按需从公开镜像源拉取（支持断点续传）。
   * 不静默提权。防火墙放行、守护服务这类要提权的动作一律走系统 UAC。
   * 只用标准库（含 tkinter），不引第三方依赖。
 """
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import subprocess
@@ -32,24 +32,9 @@ from tkinter import filedialog, messagebox, ttk
 APP_NAME = "Lumen"
 VERSION = "1.0.0"
 
-# GitHub 仓库（Release 资产来源）
-GITHUB_REPO = os.environ.get("LUMEN_GITHUB_REPO", "shmafan-lgtm/LumenAI").strip()
-GITHUB_API = "https://api.github.com/repos/{repo}/releases/latest"
-
-# ---------------------------------------------------------------- 受控主体端点
-# 仿 Visual Studio Installer：对外只发引导器（安装器本体），
-# AI 主体程序不在公开页面暴露直链，必须由安装器带令牌取回。
-# 令牌明文内置在安装器里，服务端只存 sha256 摘要做比对。
-CORE_ENDPOINT = os.environ.get(
-    "LUMEN_CORE_ENDPOINT",
-    "https://lumen-ai-download.app.workbuddy.host/core?sharecode=DYLEWJHSOL").strip()
-CORE_TOKEN = os.environ.get(
-    "LUMEN_CORE_TOKEN",
-    "koCVPXeGIgAoUXJq7QTrjb6JN1xjEx3t36rmuJdY894").strip()
-
-# 程序包在 GitHub Release 上的资产名（按顺序尝试）
-APP_ASSET_CANDIDATES = ["Lumen-Portable.zip", "Lumen-Portable.exe",
-                        "Lumen-win.zip", "Lumen.exe"]
+# 程序主体（Lumen-Portable.zip）随安装器一起打包为内部数据，
+# 运行时从 sys._MEIPASS 读取，对外不存在任何下载直链。
+PAYLOAD_INTERNAL = "payload/Lumen-Portable.zip"
 
 # 模型档位：安装器可下载的权重（走 hf-mirror 直链，断点续传）。
 # 注意：权重当年没推上 GitHub，走镜像源才是真能下到的地方。
@@ -194,51 +179,12 @@ def _http_get(url: str, dest: str, on_progress=None, timeout: int = 60,
         return False
 
 
-def _http_get_core(dest: str, on_progress=None, timeout: int = 60) -> bool:
-    """从受控端点拉取 AI 主体（带令牌）。
-
-    主体端点要求 X-Lumen-Token 头；令牌由安装器内置。
-    """
-    return _http_get(CORE_ENDPOINT, dest, on_progress, timeout,
-                     headers={"X-Lumen-Token": CORE_TOKEN})
-
-
 def _human(n: float) -> str:
     for unit in ("B", "KB", "MB", "GB"):
         if n < 1024 or unit == "GB":
             return "%.1f %s" % (n, unit)
         n /= 1024.0
     return "%.1f GB" % n
-
-
-# ------------------------------------------------------------------ GitHub
-
-def _release_asset_url(name_hint) -> str | None:
-    """在最新 Release 里找一个匹配的资产下载直链。"""
-    try:
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        req = urllib.request.Request(GITHUB_API.format(repo=GITHUB_REPO),
-                                     headers={"User-Agent": "Lumen-Setup"})
-        with opener.open(req, timeout=30) as r:
-            data = json.loads(r.read().decode("utf-8"))
-        names = [a.get("name", "").lower() for a in data.get("assets", [])]
-        if isinstance(name_hint, (list, tuple)):
-            cands = name_hint
-        else:
-            cands = [name_hint]
-        for cand in cands:
-            cl = cand.lower()
-            for a in data.get("assets", []):
-                if a.get("name", "").lower().endswith(cl) or cl in a.get("name", "").lower():
-                    return a.get("browser_download_url")
-        # 兜底：取第一个 .zip / .exe
-        for a in data.get("assets", []):
-            n = a.get("name", "").lower()
-            if n.endswith(".zip") or n.endswith(".exe"):
-                return a.get("browser_download_url")
-    except Exception:
-        return None
-    return None
 
 
 def _extract_zip(zip_path: str, dest: str) -> bool:
@@ -397,7 +343,7 @@ class SetupApp:
     def _update_size(self) -> None:
         tot = sum(m["size_gb"] for m in MODEL_CATALOG if self.model_vars[m["id"]].get())
         self.model_size_label.configure(
-            text="已选模型合计约 %.1f GB（不含程序包 ~120 MB）" % tot)
+            text="已选模型合计约 %.1f GB（程序已随安装器内置）" % tot)
 
     def _pick_dir(self) -> None:
         d = filedialog.askdirectory(title="选择安装位置", initialdir=self.target)
@@ -436,13 +382,12 @@ class SetupApp:
         target = self.target
         try:
             os.makedirs(target, exist_ok=True)
-            self._set(5, "下载 Lumen 程序包（从 GitHub，约 120 MB）…")
+            self._set(5, "解包内置 Lumen 程序（约 120 MB）…")
             if not self._download_app(target):
-                self._set(100, "无法从 GitHub 下载程序包：请确认已发布 Lumen-Portable.zip 到 Releases")
+                self._set(100, "内置程序包解包失败")
                 self.root.after(0, self._page_error,
-                                "未能从 GitHub 下载 Lumen 程序包。\n"
-                                "需要先在仓库 Releases 发布 Lumen-Portable.zip\n"
-                                "（含 Lumen.exe + _internal + 运行时）。")
+                                "未能解包内置的 Lumen 程序包。\n"
+                                "请确认安装器完整未被损坏，或重新下载 Lumen-Setup.exe。")
                 return
             self._set(45, "程序包已就位")
 
@@ -476,6 +421,15 @@ class SetupApp:
         except Exception as e:  # noqa: BLE001
             self.root.after(0, self._page_error, str(e))
 
+    def _bundled_payload(self) -> str | None:
+        """安装器内部随附的程序包（PyInstaller 打包进 _MEIPASS）。"""
+        base = getattr(sys, "_MEIPASS", "") or ""
+        if base:
+            p = os.path.join(base, PAYLOAD_INTERNAL)
+            if os.path.isfile(p) and os.path.getsize(p) > 1024 * 1024:
+                return p
+        return None
+
     def _local_app_payload(self) -> str | None:
         """安装器同目录下若自带程序包，优先用本地（离线安装 / 内网分发 / 演示都可用）。
 
@@ -493,56 +447,23 @@ class SetupApp:
         return None
 
     def _download_app(self, target: str) -> bool:
-        # 1) 本地兜底：安装器自带程序包时优先用本地，无需联网
+        # 1) 安装器内部自带程序包（首选，零联网、零直链）
+        internal = self._bundled_payload()
+        if internal:
+            self._set(12, "解包内置 Lumen 程序…")
+            return _extract_zip(internal, target)
+        # 2) 同目录自带程序包（离线分发 / 内网部署场景）
         local = self._local_app_payload()
         if local:
-            self._set(15, "使用本地自带程序包…")
+            self._set(12, "使用本地自带程序包…")
             if local.lower().endswith(".zip"):
-                if _extract_zip(local, target):
-                    return True
-            else:
-                try:
-                    shutil.copy2(local, os.path.join(target, "Lumen.exe"))
-                    return True
-                except OSError:
-                    pass
-        # 2) 受控端点（首选）：AI 主体不在公开页面暴露，由安装器带令牌取回
-        dest = os.path.join(target, "_app_dl.tmp")
-        if CORE_ENDPOINT:
-            self._set(8, "正在获取 Lumen 程序包…")
-            if _http_get_core(dest, lambda d, t, s: self._set(
-                    5 + int(35 * d / max(t, 1)),
-                    "下载 Lumen 程序包… %s / %s" % (_human(d), _human(t)))):
-                if _extract_zip(dest, target):
-                    try:
-                        os.remove(dest)
-                    except OSError:
-                        pass
-                    return True
+                return _extract_zip(local, target)
             try:
-                os.remove(dest)
+                shutil.copy2(local, os.path.join(target, "Lumen.exe"))
+                return True
             except OSError:
-                pass
-        # 3) 兜底：从 GitHub Release 拉取
-        url = _release_asset_url(APP_ASSET_CANDIDATES)
-        if not url:
-            return False
-        if not _http_get(url, dest, lambda d, t, s: self._set(
-                5 + int(35 * d / max(t, 1)), "下载 Lumen 程序包… %s" % _human(d))):
-            return False
-        if url.lower().endswith(".zip"):
-            ok = _extract_zip(dest, target)
-            try:
-                os.remove(dest)
-            except OSError:
-                pass
-            return ok
-        # 单 exe
-        try:
-            os.replace(dest, os.path.join(target, "Lumen.exe"))
-        except OSError:
-            return False
-        return True
+                return False
+        return False
 
     def _download_models(self, target: str, selected: list) -> None:
         models_dir = os.path.join(target, "models")

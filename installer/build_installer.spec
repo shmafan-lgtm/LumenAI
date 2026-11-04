@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller 打包配置：Lumen-Setup.exe（精简分发版安装向导）。
+"""PyInstaller 打包配置：Lumen-Setup.exe（自包含安装向导）。
 
-设计：安装包本身不含程序与权重，运行时从 GitHub Release / 镜像源按需下载，
-所以安装包只有几 MB。仅用标准库 + tkinter。
+设计：Lumen 程序主体（Lumen-Portable.zip）随安装器一体打包为内部数据，
+安装时从 sys._MEIPASS 直接解包，不对外暴露任何下载直链。仅用标准库 + tkinter。
 
 用法：
     python -m PyInstaller --noconfirm --clean --distpath dist_setup --workpath build_setup installer/build_installer.spec
@@ -16,8 +16,10 @@ import sys
 ROOT = os.path.abspath(os.getcwd())
 sys.path.insert(0, ROOT)
 
-# 不再内嵌 payload：安装器只负责「下载并装配」，保证体积小。
-datas = []
+# 程序主体随安装器一体打包（内部数据，不对外暴露直链）。
+datas = [
+    (os.path.join(ROOT, "dist_setup", "Lumen-Portable.zip"), "payload"),
+]
 
 hiddenimports = [
     "tkinter",
