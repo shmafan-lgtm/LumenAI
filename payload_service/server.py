@@ -3,19 +3,26 @@
 
 对外只暴露两样东西：
   GET /                 -> 引导页（只提供安装器下载）
-  GET /Lumen-Setup.exe  -> 安装器本体（几 MB，引导器）
+  GET /Lumen-Setup.exe  -> 安装器本体（约 47 MB，引导器，内含 AI 主体）
 
-AI 主体程序（core.zip）走受控端点，必须携带正确令牌才会返回：
-  GET /core             -> 需要 X-Lumen-Token 头（正确才 200，否则 403）
+AI 权重文件走受控端点，必须携带正确令牌才会返回，且不可单独下载：
+  GET /w/<file>         -> 需要 X-Lumen-Token 头（正确才 200，否则 403）
+  GET /manifest         -> 需要 X-Lumen-Token 头，返回可用权重清单(JSON)
 
-主体文件物理上以多个分片存放（规避平台单文件体积上限），
-服务端把分片拼接成一个虚拟大文件，并完整支持 Range 请求，
-所以安装器可以断点续传、多线程分段下载。
+权重文件物理上以原始大文件存放于 WEIGHTS_DIR（不切分），
+服务端对单文件完整支持 Range 请求，安装器可断点续传。
+
+设计要点：
+  * 权重对外不存在直链——没令牌一律 403，只有内置令牌的安装器能取回；
+    满足「不可单独下载、只能用安装器调用」。
+  * 服务端只持有令牌 sha256 摘要，令牌明文只存在于安装器内。
+  * 全站不含任何上游构建平台字样（部署时域名也须中性）。
 """
 from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 import re
 import sys
@@ -25,6 +32,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PARTS_DIR = os.path.join(ROOT, "core_parts")
 WEB_DIR = os.path.join(ROOT, "web")
+WEIGHTS_DIR = os.environ.get("LUMEN_WEIGHTS_DIR",
+                             os.path.join(ROOT, "weights"))
 
 
 def _load_token_sha() -> str:
@@ -157,12 +166,27 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------------------------------------------------------- 路由
     def do_GET(self):
+        try:
+            self._route_get()
+        except (BrokenPipeError, ConnectionResetError):
+            return
+        except Exception:
+            try:
+                self.send_error(400, "bad request")
+            except Exception:
+                pass
+
+    def _route_get(self):
         path = urllib.parse.urlparse(self.path).path
         if path == "/Lumen-Setup.exe":
             return self._file(os.path.join(ROOT, "Lumen-Setup.exe"),
                               "application/x-msdownload",
                               {"Content-Disposition":
                                'attachment; filename="Lumen-Setup.exe"'})
+        if path.startswith("/w/"):
+            return self._serve_weight(path[len("/w/"):])
+        if path == "/manifest":
+            return self._serve_manifest()
         if path in ("/core", "/core.zip", "/payload"):
             return self._serve_core()
         # 引导页
@@ -180,6 +204,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_HEAD(self):
+        try:
+            self._route_head()
+        except (BrokenPipeError, ConnectionResetError):
+            return
+        except Exception:
+            try:
+                self.send_error(400, "bad request")
+            except Exception:
+                pass
+
+    def _route_head(self):
         path = urllib.parse.urlparse(self.path).path
         if path in ("/core", "/core.zip", "/payload"):
             if not self._token_ok():
@@ -190,7 +225,86 @@ class Handler(BaseHTTPRequestHandler):
             total = sum(os.path.getsize(p) for p in _parts())
             self._head(200, "application/zip", total)
             return
+        if path.startswith("/w/"):
+            return self._head_weight(path[len("/w/"):])
+        if path == "/manifest":
+            if not self._token_ok():
+                self.send_response(403)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self._head(200, "application/json; charset=utf-8", 0)
+            return
         self.do_GET()
+
+    # ---------------------------------------------------------- 权重受控下发
+    @staticmethod
+    def _safe_name(name: str) -> str:
+        name = urllib.parse.unquote(name)
+        if not name or "/" in name or "\\" in name or name.startswith(".") \
+                or ".." in name or "\x00" in name:
+            return ""
+        return name
+
+    def _serve_weight(self, name: str) -> None:
+        if not self._token_ok():
+            self._head(403, "application/json", 0)
+            try:
+                self.wfile.write(b'{"ok":false,"error":"forbidden"}')
+            except Exception:
+                pass
+            return
+        name = self._safe_name(name)
+        if not name:
+            self.send_error(400, "bad name")
+            return
+        fp = os.path.join(WEIGHTS_DIR, name)
+        if not os.path.isfile(fp):
+            self.send_error(404, "not found")
+            return
+        self._file(fp, "application/octet-stream",
+                   {"Content-Disposition":
+                    'attachment; filename="%s"' % name,
+                    "Cache-Control": "no-store"})
+
+    def _head_weight(self, name: str) -> None:
+        if not self._token_ok():
+            self.send_response(403)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        name = self._safe_name(name)
+        if not name:
+            self.send_error(400)
+            return
+        fp = os.path.join(WEIGHTS_DIR, name)
+        if not os.path.isfile(fp):
+            self.send_error(404)
+            return
+        self._head(200, "application/octet-stream", os.path.getsize(fp))
+
+    def _serve_manifest(self) -> None:
+        if not self._token_ok():
+            self._head(403, "application/json", 0)
+            try:
+                self.wfile.write(b'{"ok":false,"error":"forbidden"}')
+            except Exception:
+                pass
+            return
+        items = []
+        if os.path.isdir(WEIGHTS_DIR):
+            for n in sorted(os.listdir(WEIGHTS_DIR)):
+                fp = os.path.join(WEIGHTS_DIR, n)
+                if os.path.isfile(fp) and n.lower().endswith(".gguf"):
+                    items.append({"file": n, "size": os.path.getsize(fp)})
+        body = json.dumps({"ok": True, "weights": items},
+                          ensure_ascii=False).encode("utf-8")
+        self._head(200, "application/json; charset=utf-8", len(body),
+                   {"Cache-Control": "no-store"})
+        try:
+            self.wfile.write(body)
+        except Exception:
+            pass
 
     def _serve_core(self):
         if not self._token_ok():

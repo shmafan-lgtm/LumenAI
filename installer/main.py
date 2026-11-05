@@ -5,13 +5,14 @@
   1. 选安装目录（默认 %LOCALAPPDATA%\\Programs\\Lumen）
   2. 勾选要下载的模型（Core 3B / H1 Turbo / mini se / V1 Ultra），
      各档标注体积与显存门槛，用户按需勾选，避免把用不到的大模型一起下载。
-  3. 安装器把内置的 Lumen 程序包解压到目标目录，再从镜像源拉取所选模型权重
+  3. 安装器把内置的 Lumen 程序包解压到目标目录，再从受控后端拉取所选模型权重
   4. 完成
 
 设计约束：
   * Lumen 程序主体（Lumen.exe + _internal + 运行时）已随安装器一体打包，
     安装时直接从安装器内部解包，不对外暴露任何下载直链。
-  * 模型权重较大且可独立选择，仍按需从公开镜像源拉取（支持断点续传）。
+  * 模型权重较大，优先从「受控后端」（本网站内部，令牌校验、不可单独下载）
+    拉取；后端不可达时回退公开镜像源（hf-mirror / hf，支持断点续传）。
   * 不静默提权。防火墙放行、守护服务这类要提权的动作一律走系统 UAC。
   * 只用标准库（含 tkinter），不引第三方依赖。
 """
@@ -37,6 +38,15 @@ VERSION = "1.0.0"
 # 程序主体（Lumen-Portable.tar.xz，xz 高压缩约 36MB）随安装器一起打包为内部数据，
 # 运行时从 sys._MEIPASS 读取并解包，对外不存在任何下载直链。
 PAYLOAD_INTERNAL = "payload/Lumen-Portable.tar.xz"
+
+# 受控权重端点（本网站内部）：安装器优先从这里拉权重，失败再回退公开镜像。
+# 部署到国内主机后，构建时用 LUMEN_WEIGHTS_ENDPOINT 覆盖为本网站域名；
+# 令牌明文只存在于安装器内，服务端只比对 sha256 摘要，无令牌一律 403。
+WEIGHTS_ENDPOINT = os.environ.get(
+    "LUMEN_WEIGHTS_ENDPOINT", "https://lumen-cdn.example/w").strip().rstrip("/")
+WEIGHTS_TOKEN = os.environ.get(
+    "LUMEN_WEIGHTS_TOKEN",
+    "koCVPXeGIgAoUXJq7QTrjb6JN1xjEx3t36rmuJdY894").strip()
 
 # 模型档位：安装器可下载的权重（走 hf-mirror 直链，断点续传）。
 # 注意：权重当年没推上 GitHub，走镜像源才是真能下到的地方。
@@ -79,8 +89,10 @@ MODEL_CATALOG = [
         "title": "Lumen V1 Ultra", "size_gb": 5.95, "vram": "需 24 GB 显存 · 旗舰机专用",
         "recommend": False,
         "urls": [
-            "https://hf-mirror.com/prism-ml/Ternary-Bonsai-2-27B/resolve/main/"
-            "V1-Ultra-PTQ1_0.gguf",
+            "https://hf-mirror.com/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/main/"
+            "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+            "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/main/"
+            "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
         ],
     },
 ]
@@ -505,12 +517,27 @@ class SetupApp:
                 continue
             base = 75 + int(20 * done_gb / max(total_gb, 0.1))
             ok = False
-            for url in m["urls"]:
-                ok = _http_get(url, dest, lambda d, t, s, _m=m: self._set(
-                    int(base + 20 * (done_gb + d / (1024 ** 3)) / max(total_gb, 0.1)),
-                    "下载 %s … %s" % (_m["title"], _human(d))))
-                if ok:
-                    break
+            # 优先：受控后端（本网站内部，令牌校验，不可单独下载）
+            if WEIGHTS_ENDPOINT:
+                url = "%s/%s" % (WEIGHTS_ENDPOINT, m["file"])
+                ok = _http_get(
+                    url, dest,
+                    lambda d, t, s, _m=m: self._set(
+                        int(base + 20 * (done_gb + d / (1024 ** 3))
+                            / max(total_gb, 0.1)),
+                        "从官方源下载 %s … %s" % (_m["title"], _human(d))),
+                    headers={"X-Lumen-Token": WEIGHTS_TOKEN})
+            # 回退：公开镜像（hf-mirror / hf）
+            if not ok:
+                for url in m["urls"]:
+                    ok = _http_get(
+                        url, dest,
+                        lambda d, t, s, _m=m: self._set(
+                            int(base + 20 * (done_gb + d / (1024 ** 3))
+                                / max(total_gb, 0.1)),
+                            "下载 %s … %s" % (_m["title"], _human(d))))
+                    if ok:
+                        break
             if ok:
                 done_gb += m["size_gb"]
 

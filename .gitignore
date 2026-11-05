@@ -64,3 +64,6 @@ download_site/
 # 受控分发后端：只入库源码，产物不入库
 payload_service/core_parts/
 payload_service/Lumen-Setup.exe
+
+# 安装器构建中间产物（由 Lumen-Portable.zip 经 xz 重压生成，见 build 说明）
+installer/payload/
