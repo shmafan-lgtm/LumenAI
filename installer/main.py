@@ -39,11 +39,11 @@ VERSION = "1.0.0"
 # 运行时从 sys._MEIPASS 读取并解包，对外不存在任何下载直链。
 PAYLOAD_INTERNAL = "payload/Lumen-Portable.tar.xz"
 
-# 受控权重端点（本网站内部）：安装器优先从这里拉权重，失败再回退公开镜像。
-# 部署到国内主机后，构建时用 LUMEN_WEIGHTS_ENDPOINT 覆盖为本网站域名；
-# 令牌明文只存在于安装器内，服务端只比对 sha256 摘要，无令牌一律 403。
+# 受控权重端点（本网站内部）：若已部署受控主机，构建时用 LUMEN_WEIGHTS_ENDPOINT
+# 覆盖为本网站域名，安装器优先从这里拉权重（令牌校验、不可单独下载）；
+# 默认留空 => 直接走公开镜像（hf-mirror / hf，免费、无需卡、支持断点续传）。
 WEIGHTS_ENDPOINT = os.environ.get(
-    "LUMEN_WEIGHTS_ENDPOINT", "https://lumen-cdn.example/w").strip().rstrip("/")
+    "LUMEN_WEIGHTS_ENDPOINT", "").strip().rstrip("/")
 WEIGHTS_TOKEN = os.environ.get(
     "LUMEN_WEIGHTS_TOKEN",
     "koCVPXeGIgAoUXJq7QTrjb6JN1xjEx3t36rmuJdY894").strip()
