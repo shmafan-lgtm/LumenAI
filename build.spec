@@ -83,6 +83,9 @@ hiddenimports += [
     "core.hardware",
     "core.llamacpp",
     "core.config",
+    "core.metrics",
+    "core.knowledge",
+    "core.prompt",
 ]
 
 a = Analysis(

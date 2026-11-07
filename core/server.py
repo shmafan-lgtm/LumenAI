@@ -17,7 +17,7 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import agent, auth, config, engine, firewall, hardware, llamacpp, models, remote, screencap_service, search, store, weights
+from . import agent, auth, config, engine, firewall, hardware, llamacpp, metrics, models, remote, screencap_service, search, store, weights
 
 APP_NAME = "Lumen"
 VERSION = "1.0.0"
@@ -150,6 +150,21 @@ class Handler(BaseHTTPRequestHandler):
                 if not s:
                     return self._err("会话不存在", 404)
                 return self._json(s)
+
+            if path == "/api/metrics":
+                # 五项质量指标：正确率 / 幻觉率 / 拒答准确率 / 证据覆盖率 / 过度拒答率
+                # 数据来自真实会话里 assistant 消息的 meta（refused / sources / confidence）。
+                limit = int(self._query().get("limit", "200") or 200)
+                samples = store.recent_assistant_messages(limit=limit)
+                recs = metrics.from_messages(samples)
+                summary = metrics.evaluate(recs)
+                return self._json({
+                    "summary": summary,
+                    "definitions": metrics.DEFINITIONS,
+                    "samples": len(samples),
+                    "note": ("正确率只统计「已作答且可判定」的样本——本地对话没有可靠的人工判分，"
+                             "因此不猜、不污染指标；拒答一律不计入正确率分母。"),
+                })
 
             if path == "/api/sync":
                 seq = int(self._query().get("seq", "0") or 0)

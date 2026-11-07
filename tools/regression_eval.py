@@ -203,8 +203,15 @@ def _ensure_server() -> str:
 
 
 def call_chat(base_url: str, prompt: str, timeout: float = 180.0,
-              system: str = "") -> tuple[str, str]:
-    """返回 (最终回答, 思考内容)。gpt-oss 的思考在 reasoning_content 里。"""
+              system: str = "", max_tokens: int = 1500,
+              reasoning_effort: str = "low") -> tuple[str, str]:
+    """返回 (最终回答, 思考内容)。gpt-oss 的思考在 reasoning_content 里。
+
+    ⚠ 参数很重要：gpt-oss 默认把大半 token 花在 reasoning 上，若 max_tokens 太小
+    会「思考没写完就截断」→ content 为空 → 看起来像回复失败。
+    实测：max_tokens=700 不指定 effort → content 0 字符；
+         max_tokens=1200 + effort=low → content 1861 字符、reasoning 仅 45 字符。
+    """
     msgs = []
     if system:
         msgs.append({"role": "system", "content": system})
@@ -212,9 +219,11 @@ def call_chat(base_url: str, prompt: str, timeout: float = 180.0,
     payload = {
         "model": "local",
         "messages": msgs,
-        "max_tokens": 700,
+        "max_tokens": int(max_tokens),
         "temperature": 0.0,
     }
+    if reasoning_effort:
+        payload["reasoning_effort"] = str(reasoning_effort)
     req = urllib.request.Request(
         base_url.rstrip("/") + "/v1/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
@@ -304,6 +313,8 @@ def main() -> int:
     ap.add_argument("--timeout", type=float, default=180.0)
     ap.add_argument("--selfcheck", action="store_true")
     ap.add_argument("--limit", type=int, default=0, help="只跑前 N 题（调试用）")
+    ap.add_argument("--max-tokens", type=int, default=1500)
+    ap.add_argument("--reasoning-effort", default="low")
     ap.add_argument("--with-system", action="store_true",
                     help="带上 Lumen 的真实系统提示（测拒答协议带来的过度拒答风险）")
     args = ap.parse_args()
@@ -337,14 +348,18 @@ def main() -> int:
         except Exception:
             pass
         try:
-            text, reason = call_chat(base_url, prompt, args.timeout, system=system)
+            text, reason = call_chat(base_url, prompt, args.timeout, system=system,
+                                        max_tokens=args.max_tokens,
+                                        reasoning_effort=args.reasoning_effort)
             err = ""
         except Exception as e:  # noqa: BLE001
             text, reason, err = "", "", f"{type(e).__name__}: {e}"
             # 服务可能中途被回收（闲置释放/崩溃）→ 重新拉起并重试本题
             try:
                 base_url = _ensure_server()
-                text, reason = call_chat(base_url, prompt, args.timeout, system=system)
+                text, reason = call_chat(base_url, prompt, args.timeout, system=system,
+                                        max_tokens=args.max_tokens,
+                                        reasoning_effort=args.reasoning_effort)
                 err = ""
                 print(f"  [{i+1:2d}/{len(qs)}] 重启后重试成功", flush=True)
             except Exception as e2:  # noqa: BLE001

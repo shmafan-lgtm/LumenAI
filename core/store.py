@@ -257,3 +257,26 @@ def kv_get(k: str, default=None):
         return json.loads(row["v"])
     except Exception:
         return default
+
+
+def recent_assistant_messages(limit: int = 200) -> list[dict]:
+    """最近的助手消息（含 meta），用于质量指标统计。
+
+    meta 里带着 signals：refused（是否拒答）、sources（是否检索到证据）、
+    confidence（模型自报把握度）。
+    """
+    with _lock:
+        rows = _db().execute(
+            "SELECT content, meta FROM messages WHERE role='assistant' "
+            "ORDER BY seq DESC LIMIT ?", (int(limit),)
+        ).fetchall()
+    out = []
+    for r in rows:
+        try:
+            meta = json.loads(r["meta"] or "{}")
+        except Exception:
+            meta = {}
+        if not isinstance(meta, dict):
+            meta = {}
+        out.append({"content": r["content"] or "", "meta": meta})
+    return out
