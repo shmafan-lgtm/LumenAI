@@ -45,6 +45,10 @@ LOG_PATH = os.path.join(config.LOG_DIR, "llamacpp.log")
 # llama-server 被强杀或 Lumen 重启后，新进程可以从这里恢复后端信息，
 # 否则界面上只能显示笼统的「本地引擎在线」，看不出到底跑在 Vulkan 还是 CPU。
 STATE_PATH = os.path.join(config.DATA_DIR, "llamacpp.json")
+# llama-server 自己的输出落这里。看门狗靠它识别「有没有人在用模型」——
+# 因为请求可能来自 Lumen，也可能来自 curl/别的客户端，只有服务端日志最权威。
+SERVER_LOG_PATH = os.path.join(config.LOG_DIR, "llamacpp_server.log")
+SERVER_LOG_MAX = 8 * 1024 * 1024
 
 # --fit 的显存预留余量(MB)。llama.cpp 默认留 1024MB，太保守：
 # 权重比显存大时，剩下的部分全落内存，会把本机其他程序挤出去。
@@ -74,14 +78,55 @@ def idle_minutes() -> float:
     return (time.time() - _activity["ts"]) / 60.0
 
 
+def _server_busy() -> bool:
+    """服务端是否正在处理请求（llama.cpp /slots 的 is_processing）。"""
+    d = _http(f"http://{HOST}:{SERVER_PORT}/slots", timeout=2.0)
+    if isinstance(d, list):
+        for s in d:
+            if isinstance(s, dict) and s.get("is_processing"):
+                return True
+    return False
+
+
+def _server_log_activity(offset: int) -> tuple[bool, int]:
+    """扫描服务端日志新增内容，判断这段时间有没有请求进来。
+
+    返回 (有活动, 新的读取偏移)。llama-server 每处理一个请求都会打一行
+    `slot launch_slot_: ... processing task`，与客户端是不是 Lumen 无关。
+    """
+    try:
+        size = os.path.getsize(SERVER_LOG_PATH)
+    except OSError:
+        return False, offset
+    if size < offset:          # 日志被轮转/清空
+        offset = 0
+    if size == offset:
+        return False, offset
+    try:
+        with open(SERVER_LOG_PATH, "r", encoding="utf-8", errors="replace") as f:
+            f.seek(offset)
+            data = f.read(256 * 1024)
+            new_offset = f.tell()
+    except OSError:
+        return False, offset
+    hit = ("processing task" in data) or ("slot release" in data) or ("POST /v1/" in data)
+    return hit, new_offset
+
+
 def _idle_watchdog(proc) -> None:
     """闲置看门狗：超过 IDLE_MINUTES 没有请求就释放模型占用的显存与内存。
+
+    活动判定用三个信号，避免误杀正在使用模型的人：
+      1) Lumen 引擎侧的 note_activity()（本机 UI 提问）；
+      2) 服务端 /slots 的 is_processing（正在生成）；
+      3) 服务端日志新增的请求行（任何客户端，包括 curl / 其它程序）。
 
     只针对 Lumen 自己 spawn 的这个 llama-server 子进程；
     绝不结束同机其他人的任何程序。
     """
+    offset = 0
     while True:
-        time.sleep(20)
+        time.sleep(15)
         try:
             if proc.poll() is not None:
                 return
@@ -89,6 +134,14 @@ def _idle_watchdog(proc) -> None:
             return
         if IDLE_MINUTES <= 0:
             continue
+        try:
+            if _server_busy():
+                note_activity()
+            hit, offset = _server_log_activity(offset)
+            if hit:
+                note_activity()
+        except Exception:
+            pass
         idle = idle_minutes()
         if idle < IDLE_MINUTES:
             continue
@@ -107,6 +160,12 @@ def _idle_watchdog(proc) -> None:
                 _state["own"] = False
                 _state["model"] = ""
                 _state["backend"] = ""
+            try:
+                fh = _state.pop("log_fh", None)
+                if fh is not None:
+                    fh.close()
+            except Exception:
+                pass
             try:
                 os.remove(STATE_PATH)
             except Exception:
@@ -290,15 +349,31 @@ def _spawn(model: str, port: int, ngl: int, ctx: int, fit: bool = True) -> subpr
     env["GGML_VK_VISIBLE_DEVICES"] = env.get("GGML_VK_VISIBLE_DEVICES", "0")
     si = subprocess.STARTUPINFO()
     si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    return subprocess.Popen(
+    # 服务端输出落盘：既方便排障，也给闲置看门狗提供最可靠的活动信号
+    fh = None
+    try:
+        os.makedirs(os.path.dirname(SERVER_LOG_PATH), exist_ok=True)
+        try:
+            if os.path.getsize(SERVER_LOG_PATH) > SERVER_LOG_MAX:
+                with open(SERVER_LOG_PATH, "w", encoding="utf-8"):
+                    pass
+        except OSError:
+            pass
+        fh = open(SERVER_LOG_PATH, "a", encoding="utf-8", errors="replace")
+    except OSError:
+        fh = None
+    proc = subprocess.Popen(
         args,
         cwd=RUNTIME_DIR,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=(fh if fh is not None else subprocess.DEVNULL),
+        stderr=subprocess.STDOUT if fh is not None else subprocess.DEVNULL,
         env=env,
         startupinfo=si,
         creationflags=CREATE_NO_WINDOW,
     )
+    if fh is not None:
+        _state["log_fh"] = fh
+    return proc
 
 
 def _wait_ready(port: int, timeout: float = 90.0, proc: subprocess.Popen | None = None) -> bool:
@@ -483,6 +558,12 @@ def stop() -> bool:
         _state["own"] = False
         _state["model"] = ""
         _state["backend"] = ""
+        try:
+            fh = _state.pop("log_fh", None)
+            if fh is not None:
+                fh.close()
+        except Exception:
+            pass
         try:
             os.remove(STATE_PATH)
         except Exception:

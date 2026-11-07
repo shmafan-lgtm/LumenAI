@@ -9,11 +9,15 @@ echo ============================================
 echo.
 echo  这是绿色版：不需要安装程序，把整个目录放到任意目录都能跑。
 echo  首次启动会在程序旁边自动创建：
-echo    models\        放 .gguf 权重（内置权重在 _internal\models，已就绪）
+echo    models\        放 .gguf 权重（主基座 gpt-oss-20b，界面「模型档位 → 获取权重」可下载）
 echo    workspace\     AI 的默认工作目录
 echo    data\          账号、会话库、IPC 令牌（删掉即重置）
 echo    logs\          运行日志
 echo    config\        设置、智能搜索与同步远控配置
+echo.
+echo  提示：模型权重不入安装包（10.8GB 太大），请在安装向导里勾选下载，
+echo        或装好后打开 Lumen ->「模型档位 -> 获取权重」下载 gpt-oss-20b。
+echo        未下载前 Lumen 以离线规则引擎运行（会明确标注，不假装是模型输出）。
 echo.
 echo  想换目录？直接把这个文件夹整个剪走即可，权重、会话、设置都跟着走。
 echo.

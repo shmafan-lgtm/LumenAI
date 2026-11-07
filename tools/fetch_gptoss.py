@@ -33,6 +33,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -85,7 +86,7 @@ def resolve_signed_url(resolve_url: str) -> tuple[str, int]:
     except urllib.error.HTTPError as e:
         loc = e.headers.get("Location")
         if loc:
-            final = loc
+            final = urllib.parse.urljoin(resolve_url, loc)
     except Exception as e:  # noqa: BLE001
         log(f"[resolve] HEAD 失败：{e}")
 
@@ -187,6 +188,7 @@ def main() -> int:
         with lock:
             state["n"] += 1
             done_chunks = state["n"]
+            written["n"] += chunk_size if ok else 0
         elapsed = max(time.time() - t0, 0.001)
         pct = 100.0 * done_chunks / nchunks
         speed = (done_chunks * chunk_size) / elapsed / (1024 * 1024)
@@ -196,6 +198,7 @@ def main() -> int:
         return ok
 
     failed = 0
+    written = {"n": 0}
     with ThreadPoolExecutor(max_workers=args.threads) as ex:
         futs = [ex.submit(task, i) for i in range(nchunks)]
         for fut in as_completed(futs):
@@ -203,9 +206,12 @@ def main() -> int:
                 failed += 1
 
     size = os.path.getsize(out_path) if os.path.exists(out_path) else 0
-    log(f"[3/3] 结束：{size/1024**3:.2f} GB，用时 {(time.time()-t0)/60:.1f} min，失败块 {failed}")
-    if size != total:
-        log("[error] 文件大小与预期不符（签名过期或网络中断），重跑本命令即可重下。")
+    # 文件是预分配的，size 永远等于 total；必须看**实际写入字节数**，否则稀疏文件会被误判为成功
+    got = written["n"]
+    log(f"[3/3] 结束：实际写入 {got/1024**3:.2f} GB / 预期 {total/1024**3:.2f} GB，"
+        f"用时 {(time.time()-t0)/60:.1f} min，失败块 {failed}")
+    if got != total or size != total:
+        log("[error] 下载内容不完整（可能是签名过期或网络中断），重跑本命令即可重下。")
         return 1
     log(f"[done] 权重就位：{out_path}")
     log("[next] 重启 Lumen，模型选择里选 gpt-oss-20b (H1)；"

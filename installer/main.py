@@ -22,6 +22,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import tkinter as tk
@@ -89,7 +90,7 @@ def _http_get_parallel(url: str, dest: str, expect: int, on_progress=None,
     except urllib.error.HTTPError as e:
         loc = e.headers.get("Location")
         if loc:
-            final = loc
+            final = urllib.parse.urljoin(url, loc)
     except Exception:
         pass
 
@@ -153,7 +154,15 @@ def _http_get_parallel(url: str, dest: str, expect: int, on_progress=None,
         size = os.path.getsize(part)
     except OSError:
         size = 0
-    if expect and abs(size - expect) > 1024:
+    # 预分配文件的大小永远等于 total，必须校验实际写入量，否则会交付全零假文件
+    written = state["got"]
+    if expect and abs(written - expect) > 1024:
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+        return False
+    if size != total:
         try:
             os.remove(part)
         except OSError:

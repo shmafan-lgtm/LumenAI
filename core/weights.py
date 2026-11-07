@@ -22,6 +22,7 @@ import shutil
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from . import config
@@ -196,7 +197,8 @@ def _resolve_final_url(url: str) -> str:
     except urllib.error.HTTPError as e:
         loc = e.headers.get("Location")
         if loc:
-            return loc
+            # Location 可能是相对路径（hf-mirror 的 /api/resolve-cache/…），必须拼接
+            return urllib.parse.urljoin(url, loc)
     except Exception:
         pass
     return url
@@ -289,8 +291,13 @@ def _download_parallel(url: str, dest: str, expect: int, weight_id: str,
         size = os.path.getsize(part)
     except OSError:
         size = 0
-    if expect and abs(size - expect) > 1024:
-        raise IOError(f"文件大小异常：{size} != {expect}")
+    # 注意：文件是预分配的，光看 size 会被「稀疏文件」骗过去（大小对但内容全零）。
+    # 必须校验**实际写入的字节数**。
+    written = prog["got"]
+    if expect and abs(written - expect) > 1024:
+        raise IOError(f"实际写入 {written} != 期望 {expect}（并行下载不完整，回落单连接）")
+    if size != total:
+        raise IOError(f"文件大小异常：{size} != {total}")
     os.replace(part, dest)
 
 

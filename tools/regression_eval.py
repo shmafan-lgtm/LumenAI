@@ -47,6 +47,11 @@ import urllib.request
 
 UA = "Lumen-RegressionEval/1.0"
 
+# 让脚本能 import core.*（无论从哪个目录执行）
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
 # ---------------------------------------------------------------------------
 # 60 题：6 类各 10。全部是「有明确答案、不需要联网」的一般能力题，
 # 专门用来抓过度拒答与降智，而不是考知识盲区。
@@ -325,11 +330,25 @@ def main() -> int:
     results = []
     t0 = time.time()
     for i, (kind, prompt) in enumerate(qs):
+        # 告诉运行时「有人在用」，别被闲置看门狗当成没人用而回收
+        try:
+            import core.llamacpp as _lc  # noqa: PLC0415
+            _lc.note_activity()
+        except Exception:
+            pass
         try:
             text, reason = call_chat(base_url, prompt, args.timeout, system=system)
             err = ""
         except Exception as e:  # noqa: BLE001
             text, reason, err = "", "", f"{type(e).__name__}: {e}"
+            # 服务可能中途被回收（闲置释放/崩溃）→ 重新拉起并重试本题
+            try:
+                base_url = _ensure_server()
+                text, reason = call_chat(base_url, prompt, args.timeout, system=system)
+                err = ""
+                print(f"  [{i+1:2d}/{len(qs)}] 重启后重试成功", flush=True)
+            except Exception as e2:  # noqa: BLE001
+                err = f"{err} | 重试失败: {type(e2).__name__}: {e2}"
         sc = score_one(kind, text, i)
         results.append({"idx": i, "kind": kind, "prompt": prompt,
                         "response": (text or "")[:1500],
