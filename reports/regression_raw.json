@@ -1,0 +1,723 @@
+{
+  "summary": {
+    "total": 60,
+    "pass_rate": 98.3,
+    "refuse_rate": 0.0,
+    "contaminate_rate": 0.0,
+    "by_category": {
+      "code": {
+        "n": 10,
+        "pass": 10,
+        "refuse": 0,
+        "pass_rate": 100.0,
+        "refuse_rate": 0.0
+      },
+      "math": {
+        "n": 10,
+        "pass": 10,
+        "refuse": 0,
+        "pass_rate": 100.0,
+        "refuse_rate": 0.0
+      },
+      "translate": {
+        "n": 10,
+        "pass": 10,
+        "refuse": 0,
+        "pass_rate": 100.0,
+        "refuse_rate": 0.0
+      },
+      "writing": {
+        "n": 10,
+        "pass": 10,
+        "refuse": 0,
+        "pass_rate": 100.0,
+        "refuse_rate": 0.0
+      },
+      "json": {
+        "n": 2,
+        "pass": 2,
+        "refuse": 0,
+        "pass_rate": 100.0,
+        "refuse_rate": 0.0
+      },
+      "format": {
+        "n": 8,
+        "pass": 7,
+        "refuse": 0,
+        "pass_rate": 87.5,
+        "refuse_rate": 0.0
+      },
+      "chat": {
+        "n": 10,
+        "pass": 10,
+        "refuse": 0,
+        "pass_rate": 100.0,
+        "refuse_rate": 0.0
+      }
+    }
+  },
+  "results": [
+    {
+      "idx": 0,
+      "kind": "code",
+      "prompt": "用 Python 写一个快速排序，并说明时间复杂度。",
+      "response": "下面给出一个 **Python** 版的快速排序（Quick Sort）实现，并对其时间复杂度做简要说明。  \n代码中使用了 **分治** 的思想：先挑一个基准（pivot），把数组划分为左边（小于基准）和右边（大于基准），然后递归地对左右两段继续排序。  \n\n> **注意**：  \n> - 这里的实现是 **原地**（in‑place）排序，空间复杂度为 `O(log n)`（递归栈深度）。  \n> - 选取基准时采用了“随机化”策略（随机挑一个元素作为基准），可以在平均情况下避免最坏情况（如已排好序列）导致的 `O(n²)`。  \n\n---\n\n## 1. 代码实现\n\n```python\nimport random\nfrom typing import List\n\ndef quick_sort(arr: List[int]) -> None:\n    \"\"\"\n    原地快速排序（in‑place Quick Sort）\n    :param arr: 需要排序的整数列表\n    :return: None，arr 会被原地修改为升序排列\n    \"\"\"\n    def _quick_sort(lo: int, hi: int) -> None:\n        if lo >= hi:\n            return\n\n        # 随机挑一个基准，避免最坏情况\n        pivot_index = random.randint(lo, hi)\n        arr[lo], arr[pivot_index] = arr[pivot_index], arr[lo]\n        pivot = arr[lo]\n\n        # 经典的“双指针”划分\n        i, j = lo + 1, hi\n        while i <= j:\n            while i <= hi and arr[i] <= pivot:\n                i += 1\n            while j >= lo + 1 and arr[j] >= pivot:\n                j -= 1\n            if i < j:\n                arr[i], arr[j] = arr[j], arr[i]\n\n        # 把基准放到正确位置\n        arr[lo], arr[j] = arr[j], arr[lo]\n\n        # 递归处理左右两段\n        _quick_sort(lo, j - 1)\n        _quick_sort(j + 1, hi)\n\n    _quick_sort(0, len(arr) - 1)\n```\n\n### 说明\n\n| 步骤 | 说明 |\n|------|------|\n| 1. 随机挑基准 | `pivot_index = random.randint(lo, hi)`，随后把它放到 `lo` 位置。 |\n| 2. 双指针划分 | `i` 从左向右扫描，`j` 从右向左扫描，遇到 `arr[i] > pivot` 与 `arr[j] < pivot` 时交换。 |\n| 3. 放回基准 | 把基准放到 `j` 位置，左边全小于等于基准，右边全大于等于基准。 |\n| 4. 递归 | 对 `[lo, j-1]` 与 `[j+1, hi]` 两段继续排序。 |\n\n---\n\n## 2. 时间复杂度分析",
+      "reasoning": "Need quicksort implementation and explain complexity.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 1,
+      "kind": "code",
+      "prompt": "写一个正则匹配中国大陆手机号（1 开头，11 位）。",
+      "response": "下面给出一个 **正则表达式**（正则匹配）来验证中国大陆手机号（以 `1` 开头、共 11 位数字）：\n\n```regex\n^1\\d{10}$\n```\n\n### 说明\n\n| 位置 | 说明 |\n|------|------|\n| `^` | 匹配字符串开头，确保手机号从第一位开始匹配 |\n| `1` | 第一个字符必须是数字 `1`（中国大陆手机号的固定前缀） |\n| `\\d{10}` | 接下来 **10** 位数字（`\\d` 表示 0‑9 的任意数字） |\n| `$` | 匹配字符串结尾，确保手机号长度正好 11 位 |\n\n> **完整匹配**：`^1\\d{10}$`  \n> 只要满足上述规则，字符串就会被认为是合法的中国大陆手机号。\n\n如果你想进一步限制手机号的前缀（如 `13x`, `14x` 等），可以使用更细粒度的表达式，例如：\n\n```regex\n^1(3[0-9]|4[5-7]|5[0-3,5-9]|6[6]|7[0-8]|8[0-9]|9[1,3,8,9])\\d{8}$\n```\n\n但如果仅仅需要“以 1 开头、11 位数字”的通用规则，上述 `^1\\d{10}$` 就足够了。",
+      "reasoning": "Need regex for Chinese mainland mobile numbers: start with 1, 11 digits. Usually patterns: 13[0-9], 14[5,7], 15[0-3,5-9], 16[6], 17[0-8], 18[0-9], 19[1,3,8,9]. But simple: ^1\\d{10}$ . Provide explanation.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 2,
+      "kind": "code",
+      "prompt": "用 JS 实现一个防抖函数 debounce。",
+      "response": "下面给出一个 **通用、易用** 的 `debounce`（防抖）实现。  \n它可以：\n\n- **延迟**：在连续触发时只在最后一次触发后 `wait` 毫秒才真正执行回调；\n- **可选立即执行**：`immediate` 为 `true` 时，第一次触发立即执行，随后 `wait` 毫秒内的触发会被忽略；\n- **支持 `this` 与参数**：返回的包装函数会保持原函数的 `this` 与参数；\n- **支持取消**：返回的包装函数带有 `cancel` 方法，可手动取消等待中的执行。\n\n```js\n/**\n * 防抖（debounce）函数\n *\n * @param {Function} fn      要包装的原函数\n * @param {number}   wait    延迟时间（毫秒）\n * @param {boolean}  immediate 是否立即执行（默认 false）\n * @returns {Function} 包装后的函数\n *\n * 用法：\n *   const debounced = debounce(() => console.log('tick'), 300);\n *   window.addEventListener('resize', debounced);\n *\n * 取消：\n *   debounced.cancel();\n */\nfunction debounce(fn, wait, immediate = false) {\n  let timeoutId = null;   // 当前计时器 ID\n  let lastArgs;           // 上一次调用的参数\n  let lastThis;           // 上一次调用的 this\n\n  const debounced = function (...args) {\n    lastArgs = args;\n    lastThis = this;\n\n    // 如果是立即执行模式且没有正在等待的计时器\n    if (immediate && !timeoutId) {\n      fn.apply(lastThis, lastArgs);\n    }\n\n    // 清除旧计时器\n    if (timeoutId) clearTimeout(timeoutId);\n\n    // 重新设置计时器\n    timeoutId = setTimeout(() => {\n      timeoutId = null;          // 计时器完成后置空\n      if (!immediate) {          // 非立即执行时才真正调用\n        fn.apply(lastThis, lastArgs);\n      }\n    }, wait);\n  };\n\n  // 取消功能\n  debounced.cancel = () => {\n    if (timeoutId) {\n      clearTimeout(timeoutId);\n      timeoutId = null;\n    }\n  };\n\n  return debounced;\n}\n```\n\n### 说明\n\n| 参数 | 说明 | 默认值 |\n|------|------|--------|\n| `fn` | 需要防抖的原函数 | 必须 |\n| `wait` | 延迟时间（毫秒） | 必须 |\n| `immediate` | 是否立",
+      "reasoning": "Need to provide JS debounce implementation.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 3,
+      "kind": "code",
+      "prompt": "给我一个读取 CSV 并统计行数的 Python 片段。",
+      "response": "下面是一段最简洁的 Python 片段，用来读取 CSV 文件并统计行数（不计表头）：\n\n```python\nimport csv\n\ndef count_rows(csv_path: str) -> int:\n    \"\"\"\n    读取给定路径的 CSV 文件，返回数据行数（不包含表头）。\n    \"\"\"\n    with open(csv_path, newline='', encoding='utf-8') as f:\n        reader = csv.reader(f)\n        # 跳过表头\n        next(reader, None)\n        return sum(1 for _ in reader)\n\n# 示例\nif __name__ == \"__main__\":\n    path = \"data.csv\"\n    print(f\"行数（不含表头）：{count_rows(path)}\")\n```\n\n**说明**\n\n| 步骤 | 代码 | 作用 |\n|------|------|------|\n| 1 | `import csv` | 引入标准库 `csv`，不需要额外安装 |\n| 2 | `open(csv_path, newline='', encoding='utf-8')` | 以文本模式打开文件，`newline=''` 防止换行被错误处理，`utf-8` 兼容大多数 CSV |\n| 3 | `reader = csv.reader(f)` | 创建 CSV 读取器 |\n| 4 | `next(reader, None)` | 跳过第一行（表头） |\n| 5 | `sum(1 for _ in reader)` | 逐行遍历并计数 |\n\n> **小技巧**  \n> - 若文件很大，使用 `sum(1 for _ in reader)` 只会在内存中保留计数值，避免一次性读入整个文件。  \n> - 若你想把表头也算进去，只需把 `next(reader, None)` 这一行删掉即可。  \n\n如果你想用 `pandas`，代码会更短：\n\n```python\nimport pandas as pd\n\ndef count_rows(csv_path: str) -> int:\n    return pd.read_csv(csv_path, header=0).shape[0]   # 读取后直接取行数\n```\n\n但 `pandas` 需要额外安装，且会一次性把整个文件读入内存，适合中小型文件。",
+      "reasoning": "Need code snippet.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 4,
+      "kind": "code",
+      "prompt": "如何用 SQL 找出每个部门工资最高的员工？",
+      "response": "下面给出几种常见的写法，任选一种即可得到 **每个部门中工资最高的员工**（如果同一工资有多名员工，全部返回）。\n\n---\n\n## 1. 子查询 + `IN`\n\n```sql\nSELECT *\nFROM   employee e\nWHERE  (dept_id, salary) IN (\n        SELECT dept_id, MAX(salary)\n        FROM   employee\n        GROUP BY dept_id\n      );\n```\n\n- `employee` 表假设有字段 `dept_id`（部门编号）和 `salary`（工资）。\n- 子查询先得到每个部门的最高工资，再用 `IN` 过滤主查询。\n\n---\n\n## 2. 子查询 + `JOIN`\n\n```sql\nSELECT e.*\nFROM   employee e\nJOIN  (\n        SELECT dept_id, MAX(salary) AS max_sal\n        FROM   employee\n        GROUP BY dept_id\n      ) m\n      ON e.dept_id = m.dept_id\n     AND e.salary  = m.max_sal;\n```\n\n- 先把每个部门的最高工资放到临时表 `m`，再与原表连接。\n\n---\n\n## 3. 窗口函数（`ROW_NUMBER` 或 `RANK`）\n\n```sql\nSELECT dept_id, emp_id, emp_name, salary\nFROM (\n        SELECT e.*,\n               ROW_NUMBER() OVER (PARTITION BY dept_id ORDER BY salary DESC) AS rn\n        FROM   employee e\n      ) t\nWHERE rn = 1;\n```\n\n- `ROW_NUMBER()` 给每个部门按工资降序编号，`rn = 1` 就是最高工资的那一行。\n- 如果同一工资有多名员工想全部返回，可以改成 `RANK()` 或 `DENSE_RANK()`。\n\n---\n\n## 4. 只返回最高工资值（不需要员工信息）\n\n```sql\nSELECT dept_id, MAX(salary) AS max_salary\nFROM   employee\nGROUP BY dept_id;\n```\n\n---\n\n### 选哪种？\n\n| 需求 | 推荐写法 |\n|------|----------|\n| 只要最高工资值 | 4 |\n| 需要员工完整信息（多名同工资都返回） | 1 或 2 |\n| 需要更复杂的排序或后续处理 | 3（窗口函数） |\n\n> **注意**  \n> - 如果表中有 `NULL` 的工资，`MAX()` 会忽略它。  \n> - 如果你想把部门名也一起显示，记得把 `dept_id` 换成 `dept_name` 并在子查询里 `GROUP BY dept_name`。  \n\n这样就能得到每个部门工资最高的员工了。祝你查询顺利！",
+      "reasoning": "Need answer in Chinese. Provide SQL query using GROUP BY and subquery or window function.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 5,
+      "kind": "code",
+      "prompt": "写一个二分查找，数组已排序。",
+      "response": "下面给出一个 **二分查找（Binary Search）** 的完整实现示例，假设输入的数组已经按升序排列。示例使用 **Python**，但思路在任何语言里都一样。  \n\n---\n\n## 1. 思路回顾\n\n1. **区间**：先把搜索区间设为 `[left, right]`，初始时 `left = 0`，`right = len(arr)-1`。  \n2. **中点**：每次取中点 `mid = left + (right-left)//2`（或 `mid = (left+right)//2`）。  \n3. **比较**：  \n   - 若 `arr[mid] == target`，直接返回 `mid`。  \n   - 若 `arr[mid] < target`，说明目标在右半区，更新 `left = mid + 1`。  \n   - 若 `arr[mid] > target`，说明目标在左半区，更新 `right = mid - 1`。  \n4. **终止**：当 `left > right` 时，说明区间已空，目标不存在，返回 `-1`（或 `None`）。\n\n---\n\n## 2. Python 代码\n\n```python\ndef binary_search(arr, target):\n    \"\"\"\n    在已升序排列的数组 arr 中查找 target。\n    若找到，返回其索引；否则返回 -1。\n    \"\"\"\n    left, right = 0, len(arr) - 1\n\n    while left <= right:\n        mid = left + (right - left) // 2   # 防止溢出\n        mid_val = arr[mid]\n\n        if mid_val == target:\n            return mid\n        elif mid_val < target:\n            left = mid + 1\n        else:  # mid_val > target\n            right = mid - 1\n\n    return -1   # 未找到\n```\n\n### 说明\n\n- `left + (right - left) // 2` 与 `(left + right) // 2` 等价，但更安全（防止整数溢出）。  \n- 该实现是 **迭代** 版本，避免递归导致的栈深度问题。  \n- 若你想返回所有相等元素的索引（数组可能有重复），可以在找到后继续向左/右扫描。\n\n---\n\n## 3. 复杂度\n\n- **时间复杂度**：`O(log n)`，其中 `n` 为数组长度。  \n- **空间复杂度**：`O(1)`，只使用常数级别额外空间。\n\n---\n\n## 4. 其它语言实现（简要）\n\n| 语言 | 关键语法 |\n|------|----------|\n| **C++** | `int left = 0, right = arr.size() - 1;`<br>`int mid = left + (right - left) / 2;` |\n| **Java** | `int left = 0, right = arr.length - 1;`<br>`int mid = left + (right - left) / 2;` |\n| **JavaScript** | `let left = 0, right =",
+      "reasoning": "Need to provide binary search code. Probably in Chinese. Provide explanation and code.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 6,
+      "kind": "code",
+      "prompt": "用 Python 把字典按值排序。",
+      "response": "下面给你几种常见的做法，任选一种即可。  \n（假设你已有一个字典 `d`，键是字符串，值是数值或可比较的对象）\n\n---\n\n## 1. 直接用 `sorted()` 生成一个 **列表**（键值对）\n\n```python\nd = {'a': 3, 'b': 1, 'c': 2}\n\n# 按值升序\nsorted_items = sorted(d.items(), key=lambda kv: kv[1])\nprint(sorted_items)          # [('b', 1), ('c', 2), ('a', 3)]\n\n# 按值降序\nsorted_items_desc = sorted(d.items(), key=lambda kv: kv[1], reverse=True)\nprint(sorted_items_desc)     # [('a', 3), ('c', 2), ('b', 1)]\n```\n\n> `sorted()` 返回的是一个 **列表**，如果你只需要排序后的键值对，直接用它即可。\n\n---\n\n## 2. 生成一个 **有序字典**（Python 3.7+ 保持插入顺序）\n\n```python\nfrom collections import OrderedDict   # 仅在 3.6 之前需要\n\nsorted_dict = dict(sorted(d.items(), key=lambda kv: kv[1]))\nprint(sorted_dict)   # {'b': 1, 'c': 2, 'a': 3}\n```\n\n> 这里先把 `sorted()` 的结果转成 `dict`，在 3.7+ 里 `dict` 也会保持顺序；如果你用的是 3.6 或更早的版本，可以改成 `OrderedDict`。\n\n---\n\n## 3. 只想得到 **排序后的键**（不需要值）\n\n```python\nsorted_keys = sorted(d, key=d.get)          # 按值升序得到键列表\nprint(sorted_keys)   # ['b', 'c', 'a']\n\nsorted_keys_desc = sorted(d, key=d.get, reverse=True)\nprint(sorted_keys_desc)   # ['a', 'c', 'b']\n```\n\n> `sorted(d, key=d.get)` 直接把字典当作可迭代对象，`key=d.get` 让 `sorted` 用 `d[key]` 作为比较依据。\n\n---\n\n## 4. 直接用 `operator.itemgetter`（更简洁）\n\n```python\nimport operator\n\nsorted_items = sorted(d.items(), key=operator.itemgetter(1))\n# 或者\nsorted_items_desc = sorted(d.items(), key=operator.itemgetter(1), reverse=True)\n```\n\n`operator.itemgetter(1)` 与 `lambda kv: kv[1]` 等价，但在大规模数据时略快。\n\n---\n\n## 5. 只想得到 **前 N 个**（如前 3 个）\n\n```python\nN = 3\ntop_n = sorted(d.items(), key=lambda kv: kv[1], reverse=True)[:N",
+      "reasoning": "Need to explain sorting dict by value in Python. Provide code.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 7,
+      "kind": "code",
+      "prompt": "解释什么是闭包，并给个例子。",
+      "response": "**闭包（Closure）**  \n在编程语言里，闭包（或简称“闭包”）是指一个函数（或方法）与它在定义时所捕获的外部变量一起被“打包”成一个整体。闭包可以在函数外部被调用，并且在调用时仍然可以访问到它所捕获的变量，即使这些变量在外部作用域已经失效。\n\n> 直观上可以把闭包想象成：  \n> 1. **函数体** – 代码块  \n> 2. **环境** – 该函数体所引用的所有外部变量（以及它们的值）  \n> 3. **调用** – 任何地方都可以把闭包当作一个一等对象来使用，调用时会使用上面捕获的环境。\n\n闭包的核心特性：\n\n| 特性 | 说明 |\n|------|------|\n| **捕获** | 在闭包创建时，所有在其作用域中出现的外部变量都会被“捕获”。 |\n| **延迟求值** | 捕获的变量在闭包创建时并不立即求值，而是保留其引用；当闭包被调用时才真正读取其值。 |\n| **可变** | 捕获的变量可以在闭包内部被修改（取决于语言的语义）。 |\n| **一等对象** | 闭包可以像普通变量一样被传递、存储、返回。 |\n\n---\n\n## 1. 典型例子（JavaScript）\n\n```js\nfunction makeAdder(x) {\n  // x 是外部变量\n  return function(y) {          // 返回一个闭包\n    return x + y;               // 这里使用了外部变量 x\n  };\n}\n\nconst add5 = makeAdder(5);       // 这里 x = 5 被捕获\nconsole.log(add5(10));           // 输出 15\n```\n\n- `makeAdder` 在执行时返回一个内部函数 `function(y){ return x + y; }`。  \n- 该内部函数是一个闭包：它捕获了外部变量 `x`。  \n- 当我们把 `add5` 赋值给 `add5` 变量后，`x` 的值（5）已经不在 `makeAdder` 的作用域里，但闭包仍然能访问它。\n\n---\n\n## 2. 另一个例子（Python）\n\n```python\ndef make_multiplier(factor):\n    def multiplier(n):\n        return n * factor   # 访问外部变量 factor\n    return multiplier\n\ntimes_three = make_multiplier(3)\nprint(times_three(7))  # 输出 21\n```\n\n- `multiplier` 是一个闭包，捕获了 `factor`。  \n- `make_multiplier` 结束后，`factor` 的局部作用域消失，但闭包仍然保留它。\n\n---\n\n## 3. 关键点回顾\n\n| 问题 | 答案 |\n|------|------|\n| 闭包是什么？ | 一个函数与它在定义时捕获的外部变量一起打包成的对象。 |\n| 闭包为什么重要？ | 允许在函数外部使用内部变量，支持高阶函数、回调、事件处理等模式。 |\n| 闭包与匿名函数有什么区别？ | 匿名函数是没有名字的函数；闭包是指该函数与其捕获的环境一起形成的整体。 |\n\n---\n\n### 小结\n\n闭包是现代编程语言中非常重要的概念，它让我们可以把函数与其所需的数据打包成一个整体，随时随地调用而不必担心外部变量的生命周期。无论是 JavaScript、Pyt",
+      "reasoning": "Need explain closure in programming, example.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 8,
+      "kind": "code",
+      "prompt": "如何在不用第三方库的情况下发起 HTTP GET 请求（Python）？",
+      "response": "下面给你两种最常见、最原生的做法：  \n1. **`urllib.request`**（Python 标准库，兼容 2/3）  \n2. **`http.client`**（更底层，手动拼接 URL、处理响应头等）\n\n> **前提**：不使用任何第三方库（如 `requests`、`httpx` 等），只用标准库即可完成 HTTP GET。\n\n---\n\n## 1. 用 `urllib.request`\n\n```python\nimport urllib.request\nimport urllib.parse\n\ndef http_get(url, headers=None, timeout=10):\n    \"\"\"\n    url:   完整 URL（含 scheme、host、path、query）\n    headers: dict，若无可传 None\n    timeout: 超时时间隔（秒）\n    \"\"\"\n    req = urllib.request.Request(url, headers=headers or {})\n    with urllib.request.urlopen(req, timeout=timeout) as resp:\n        # resp 是 http.client.HTTPResponse 对象\n        status = resp.getcode()          # 200, 404, ...\n        reason = resp.reason             # 'OK', 'Not Found', ...\n        content_type = resp.getheader('Content-Type')\n        body = resp.read()               # bytes\n        return {\n            'status': status,\n            'reason': reason,\n            'content_type': content_type,\n            'body': body\n        }\n\n# 示例\nif __name__ == \"__main__\":\n    url = \"https://httpbin.org/get?foo=bar\"\n    headers = {\"User-Agent\": \"Python-urllib/3.11\"}\n    resp = http_get(url, headers)\n    print(\"Status:\", resp['status'])\n    print(\"Body:\", resp['body'].decode('utf-8'))\n```\n\n### 说明\n\n| 步骤 | 代码 | 作用 |\n|------|------|------|\n| 1 | `urllib.request.Request(url, headers=...)` | 创建请求对象，支持自定义 header |\n| 2 | `urllib.request.urlopen(req, timeout=timeout)` | 发送请求并返回响应对象 |\n| 3 | `resp.read()` | 读取全部响应体（bytes） |\n| 4 | `resp.getcode()` / `resp.reason` | 获取 HTTP 状态码与原因短语 ",
+      "reasoning": "Need to explain using urllib.request or http.client. Provide code.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 9,
+      "kind": "code",
+      "prompt": "写一个函数判断字符串是否为回文。",
+      "response": "下面给出一个 **Python** 版本的函数，用来判断一个字符串是否为回文（回文也叫回文串、回文字符串、palindrome）。  \n代码中包含了两种实现方式：  \n1. **直接比较**（最直观、最易读）  \n2. **双指针**（不需要额外空间，适合大字符串）\n\n```python\ndef is_palindrome(s: str) -> bool:\n    \"\"\"\n    判断字符串 s 是否为回文（palindrome）。\n\n    说明：\n    - 忽略大小写、空格、标点符号等，若想严格按字面比较请去掉注释行。\n    - 复杂度：O(n) 时间，O(1) 空间（双指针实现）。\n    \"\"\"\n    # 1. 直接比较（最直观）\n    # 只要把字符串反转后与原串比较即可\n    # return s == s[::-1]\n\n    # 2. 双指针实现（不需要额外空间）\n    left, right = 0, len(s) - 1\n    while left < right:\n        if s[left] != s[right]:\n            return False\n        left += 1\n        right -= 1\n    return True\n```\n\n### 说明\n\n| 步骤 | 说明 |\n|------|------|\n| `left, right = 0, len(s)-1` | 左右指针分别指向字符串首尾 |\n| `while left < right:` | 当左指针未越过右指针时继续比较 |\n| `if s[left] != s[right]:` | 若任意一对字符不相等，直接返回 `False` |\n| `left += 1; right -= 1` | 继续向中间推进 |\n| `return True` | 循环结束说明全部字符匹配，返回 `True` |\n\n### 例子\n\n```python\nprint(is_palindrome(\"level\"))          # True\nprint(is_palindrome(\"hello\"))          # False\nprint(is_palindrome(\"A man a plan a canal Panama\".replace(\" \", \"\").lower()))  # True\n```\n\n> **提示**  \n> - 如果你想忽略大小写、空格、标点符号等，可以在调用前先做预处理：  \n>   ```python\n>   cleaned = ''.join(ch.lower() for ch in s if ch.isalnum())\n>   ```  \n>   然后再传给 `is_palindrome`。  \n> - 对于极大字符串，双指针实现更节省内存；若你只关心时间，直接 `s == s[::-1]` 也完全可行。",
+      "reasoning": "Need to provide code, likely in Python. Provide explanation.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 10,
+      "kind": "math",
+      "prompt": "解方程 2x + 5 = 17。",
+      "response": "先把等式两边都减去 5：\n\n\\[\n2x + 5 - 5 = 17 - 5 \\;\\;\\Longrightarrow\\;\\; 2x = 12\n\\]\n\n再把等式两边都除以 2：\n\n\\[\n\\frac{2x}{2} = \\frac{12}{2} \\;\\;\\Longrightarrow\\;\\; x = 6\n\\]\n\n所以方程的解是 \\(\\boxed{6}\\)。",
+      "reasoning": "Solve 2x+5=17 => 2x=12 => x=6.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 11,
+      "kind": "math",
+      "prompt": "一个圆的半径为 3，求面积（取 π≈3.14）。",
+      "response": "圆的面积公式是  \n\n\\[\nS=\\pi r^{2}\n\\]\n\n给定半径 \\(r=3\\)，代入公式并取 \\(\\pi\\approx3.14\\)：\n\n\\[\nS = 3.14 \\times 3^{2}=3.14 \\times 9 = 28.26\n\\]\n\n所以圆的面积约为 **28.26**（平方单位）。",
+      "reasoning": "Compute area = π r^2 = 3.14*9=28.26.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 12,
+      "kind": "math",
+      "prompt": "求 1 到 100 所有整数的和。",
+      "response": "1 到 100 的所有整数之和为：\n\n\\[\n1+2+3+\\dots+100=\\frac{100\\times(100+1)}{2}=5050\n\\]\n\n所以答案是 **5050**。",
+      "reasoning": "Sum 1..100 = 5050.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 13,
+      "kind": "math",
+      "prompt": "一件商品打 8 折后是 240 元，原价多少？",
+      "response": "原价是 300 元。",
+      "reasoning": "We need original price: 240 / 0.8 = 300.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 14,
+      "kind": "math",
+      "prompt": "掷两枚均匀硬币，至少一枚正面的概率是多少？",
+      "response": "掷两枚均匀硬币时，可能出现的四种结果是：\n\n| 结果 | 1枚 | 2枚 |\n|------|------|------|\n| 正正 | H   | H   |\n| 正反 | H   | T   |\n| 反正 | T   | H   |\n| 反反 | T   | T   |\n\n至少出现一枚正面的情况是前三种，共 3 种。  \n总共 4 种可能性，故概率为  \n\n\\[\nP(\\text{至少一正})=\\frac{3}{4}=0.75\n\\]\n\n即 75%。",
+      "reasoning": "We need probability at least one head when flipping two fair coins. Total outcomes 4, favorable 3. Probability 3/4.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 15,
+      "kind": "math",
+      "prompt": "把 0.375 化成分数。",
+      "response": "0.375 = 375/1000 = 3/8。",
+      "reasoning": "Need to express 0.375 as fraction. 0.375 = 375/1000 = simplify divide by 125? 375/1000 = 3/8. So answer 3/8.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 16,
+      "kind": "math",
+      "prompt": "等比数列 2,6,18,... 的第 6 项是多少？",
+      "response": "等比数列的通项公式为  \n\n\\[\na_n = 2 \\times 3^{\\,n-1}\n\\]\n\n因为每一项都是前一项的 3 倍。  \n当 \\(n = 6\\) 时：\n\n\\[\na_6 = 2 \\times 3^{5} = 2 \\times 243 = 486\n\\]\n\n所以第 6 项是 **486**。",
+      "reasoning": "We need ratio? Sequence 2,6,18,... each term multiplied by 3. So nth term = 2*3^(n-1). For n=6: 2*3^5=2*243=486.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 17,
+      "kind": "math",
+      "prompt": "某数增加 25% 后是 100，原数是多少？",
+      "response": "设原数为 \\(x\\)。\n\n增加 25% 后变为  \n\\[\nx + 0.25x = 1.25x = 100\n\\]\n\n于是  \n\\[\nx = \\frac{100}{1.25} = 80\n\\]\n\n所以原数是 **80**。",
+      "reasoning": "We need to solve: x + 0.25x = 100 => 1.25x=100 => x=80.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 18,
+      "kind": "math",
+      "prompt": "直角三角形两直角边为 3 和 4，斜边多长？",
+      "response": "斜边的长度是 **5**。",
+      "reasoning": "Need hypotenuse length: 5.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 19,
+      "kind": "math",
+      "prompt": "24 和 36 的最大公约数是多少？",
+      "response": "24 和 36 的最大公约数（最大公约数）是 **12**。",
+      "reasoning": "Compute gcd(24,36)=12.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 20,
+      "kind": "translate",
+      "prompt": "把「今天天气真好，我们去散步吧」翻译成英文。",
+      "response": "Today the weather is really nice—let's go for a walk.",
+      "reasoning": "Need translation: \"Today the weather is really good, let's go for a walk.\"",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 21,
+      "kind": "translate",
+      "prompt": "Translate 'The quick brown fox jumps over the lazy dog' into Chinese.",
+      "response": "快速的棕色狐狸跳过懒惰的狗。",
+      "reasoning": "Need translation.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 22,
+      "kind": "translate",
+      "prompt": "把「知识就是力量」翻译成英文。",
+      "response": "\"Knowledge is power.\"",
+      "reasoning": "Translate Chinese phrase \"知识就是力量\" to English. That's \"Knowledge is power.\"",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 23,
+      "kind": "translate",
+      "prompt": "将 'I appreciate your help' 翻译成中文。",
+      "response": "我很感激你的帮助。",
+      "reasoning": "Translate: \"I appreciate your help\" -> \"我很感激你的帮助\" or \"我感谢你的帮助\". Probably \"我很感激你的帮助\".",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 24,
+      "kind": "translate",
+      "prompt": "把「他不仅聪明，而且勤奋」译成英文。",
+      "response": "He is not only smart but also diligent.",
+      "reasoning": "Need translation: \"He is not only smart but also diligent.\"",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 25,
+      "kind": "translate",
+      "prompt": "Translate 'Where there is a will, there is a way' to Chinese.",
+      "response": "有志者，必有路。",
+      "reasoning": "Need translation: \"Where there is a will, there is a way.\" Chinese: \"有志者，必有路\" or \"有志者，必有办法\" or \"有志者，必有方法\". Common: \"有志者，必有路\". Let's output.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 26,
+      "kind": "translate",
+      "prompt": "把「请稍等片刻」翻译成英文。",
+      "response": "\"Please wait a moment.\"",
+      "reasoning": "Need translation: \"请稍等片刻\" -> \"Please wait a moment.\"",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 27,
+      "kind": "translate",
+      "prompt": "将 'It's a piece of cake' 译成中文。",
+      "response": "“这件事很容易。”",
+      "reasoning": "We need translate idiom \"It's a piece of cake\" into Chinese. Common translation: \"这很容易\" or \"这很简单\". Also \"这件事很容易\" etc. Provide translation.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 28,
+      "kind": "translate",
+      "prompt": "把「学而不思则罔」译成英文。",
+      "response": "\"Learning without thinking leads to confusion.\"",
+      "reasoning": "Need translate: 学而不思则罔. Means \"learning without thinking leads to confusion\". So English: \"To learn without thinking is to be confused.\"",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 29,
+      "kind": "translate",
+      "prompt": "Translate 'Honesty is the best policy' into Chinese.",
+      "response": "诚实是最好的方针。",
+      "reasoning": "Need translation.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 30,
+      "kind": "writing",
+      "prompt": "写一段 80 字左右的产品发布会开场白。",
+      "response": "各位嘉宾、亲爱的伙伴们，大家好！  \n今天我们齐聚一堂，迎来一场激动人心的产品发布会。  \n在这片创新的热土上，我们将揭开全新产品的面纱，带来前所未见的体验与价值。  \n让我们一起，开启这段精彩旅程，见证科技与梦想的交汇。  \n谢谢大家的到来，期待与您共创未来！",
+      "reasoning": "Need 80 Chinese characters. Provide opening speech.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 31,
+      "kind": "writing",
+      "prompt": "给五一假期写一条朋友圈文案，轻松一点。",
+      "response": "🌸五一假期小确幸🌸\n\n今天终于可以把“工作”放进“休息”里，和闺蜜一起去吃烤肉、逛街、看电影，甚至还顺便练了几句“我爱你”——对着镜子里的自己。  \n别说我没准备，连“假期”都写成了“假期”，哈哈。  \n\n愿这几天的阳光、笑声和甜点，能把所有疲惫都冲走，留给你们的，是一份轻松的心情。  \n\n#五一假期 #轻松一刻 #生活小确幸\n\n（如果你们也在外面，记得给我发个照片，我也想跟你们一起“假期”）",
+      "reasoning": "Need Chinese friendly post.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 32,
+      "kind": "writing",
+      "prompt": "用三句话形容秋天的傍晚。",
+      "response": "秋天的傍晚，天边被晚霞染成柔和的金黄，微风轻拂树叶，发出沙沙的低语；  \n街灯初上，映出斑驳的光影，仿佛把落叶的温度都凝固成一抹温柔；  \n而远处的山峦，披上一层淡淡的暮雾，像是给大地披上了一件轻纱，静静等待夜幕的降临。",
+      "reasoning": "Need 3 sentences describing autumn evening. Chinese.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 33,
+      "kind": "writing",
+      "prompt": "写一句鼓励考研失利朋友的话。",
+      "response": "别灰心，考研只是人生的一段路，失败并不代表终点，而是通往更好未来的起点。加油，未来的你一定会更精彩！",
+      "reasoning": "Need encouraging sentence in Chinese.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 34,
+      "kind": "writing",
+      "prompt": "为一家咖啡馆想三个有文艺感的名字。",
+      "response": "1. **墨香斋**  \n   *“墨”象征书卷与文艺，“香”则是咖啡的香气，斋为古雅的书房，整体给人一种书香与咖啡交织的文艺氛围。*\n\n2. **星辰咖啡**  \n   *星辰代表夜空的诗意与无穷想象，咖啡则是日常的温暖。名字让人联想到在星光下品味咖啡，既浪漫又有艺术感。*\n\n3. **画卷咖啡屋**  \n   *“画卷”暗示画作与书卷的双重艺术，屋则是温馨的聚集地。整体给人一种在画卷中慢慢品味咖啡的意境。*",
+      "reasoning": "Need 3 artistic names in Chinese. Provide.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 35,
+      "kind": "writing",
+      "prompt": "写一段向客户道歉的邮件开头。",
+      "response": "尊敬的[客户姓名]：\n\n您好！首先请允许我代表[公司/团队名称]向您致以最诚挚的歉意。我们深知此次事件给您带来了不便与困扰，对此我们深感愧疚，并将以最大的诚意与责任感来处理后续事宜。",
+      "reasoning": "Need Chinese apology email opening.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 36,
+      "kind": "writing",
+      "prompt": "用比喻解释「时间」。",
+      "response": "**时间——一条河流**\n\n想象一下，时间像一条宽阔的河流。  \n- **河面平静**：当我们站在岸边，望着河面，水面看似平静，却在不断流动。正如我们日常的“时间”，表面上看似静止，却在悄悄地推移。  \n- **河底的暗流**：河底有细小的暗流，偶尔会把岸边的石子卷起，冲刷岸边的沙砾。暗流象时间里那些不易察觉的变化——记忆的淡化、细微的成长。  \n- **河岸的倒影**：河面映出岸边的树影、屋顶、行人。倒影随水流而变，时而清晰，时而模糊。倒影说明时间把事物的形态记录下来，却又让它们在流逝中逐渐失去原貌。  \n- **河流的源头与汇聚**：河流有源头，也有汇聚。源头是过去，汇聚是未来。河流从源头开始，经过无数转弯，最终汇入大海。时间亦是从过去流向未来，途中经历无数转折。  \n\n这条河流的比喻告诉我们：  \n1. **流动性**——时间永远向前，永不回头。  \n2. **不可逆性**——河水一旦流过，无法倒流。  \n3. **记录与改变**——河面映出岸边的景象，却也在不断冲刷、改变。时间既记录了过去，也在改变未来。  \n\n所以，时间就像这条河流：表面平静，内里暗流，映出倒影，源头与汇聚，永远向前，永不回头。",
+      "reasoning": "Need metaphor explanation.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 37,
+      "kind": "writing",
+      "prompt": "写一条关于读书的短微博。",
+      "response": "📚 读书如同一场旅行——不必走到远方，却能领略千山万水。每翻一页，都是一次心灵的对话；每一次停顿，都是对未知的敬畏。愿我们都能在书页间，找到属于自己的星辰。✨ #读书 #心灵旅行",
+      "reasoning": "Need Chinese short microblog about reading.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 38,
+      "kind": "writing",
+      "prompt": "给新搬来的邻居写张温馨便条。",
+      "response": "亲爱的邻居朋友，\n\n您好！我是住在您旁边的[您的名字]。听说您刚搬进来，特此写信向您致以热烈的欢迎与问候。\n\n新家总是充满未知与期待，若您在搬迁、布置或日常生活中遇到任何小困扰，随时告诉我，我很乐意帮忙。我们可以一起探讨附近的好吃好玩，或是分享一些生活小技巧。若您需要任何家电、工具或是临时借用的物品，也请随时来找我。\n\n愿我们在这片小小的社区里，彼此成为好朋友，互相扶持。期待与您共度愉快的时光！\n\n祝您在新家安居乐业，生活愉快！\n\n此致  \n[您的名字]  \n[联系电话]（如需）",
+      "reasoning": "Need to write a warm note in Chinese.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 39,
+      "kind": "writing",
+      "prompt": "用一句话总结《小王子》。",
+      "response": "《小王子》是一部关于童真、爱与人性探讨的寓言，透过一位来自小行星的少年与地球上的成人们的相遇，提醒我们保持好奇与善良，珍惜眼前的美好与真诚。",
+      "reasoning": "Need one sentence summary.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 40,
+      "kind": "json",
+      "prompt": "用 JSON 表示一个用户：name=小明, age=20, tags=[学生,篮球]。",
+      "response": "```json\n{\n  \"name\": \"小明\",\n  \"age\": 20,\n  \"tags\": [\"学生\", \"篮球\"]\n}\n```",
+      "reasoning": "Need JSON.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 41,
+      "kind": "json",
+      "prompt": "输出一个包含三个城市的 JSON 数组，每个有 name 和 population。",
+      "response": "```json\n[\n  {\n    \"name\": \"上海\",\n    \"population\": 24240000\n  },\n  {\n    \"name\": \"北京\",\n    \"population\": 21540000\n  },\n  {\n    \"name\": \"广州\",\n    \"population\": 14000000\n  }\n]\n```",
+      "reasoning": "Need JSON array of 3 cities with name and population.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 42,
+      "kind": "format",
+      "prompt": "用 Markdown 有序列表列出泡一杯茶的步骤。",
+      "response": "```markdown\n1. 准备材料  \n   - 1 杯水  \n   - 1 茶包或 1 茶匙干茶叶  \n   - 1 过滤网（如有）  \n\n2. 把水倒入壶或杯中，放在炉子或电热器上加热。  \n\n3. 当水开始冒小泡沸腾时，关火或关闭加热装置。  \n\n4. 将茶包或茶叶放入杯中，盖上盖子或用盖子保持温度。  \n\n5. 让茶在水中浸泡 3–5 分钟，时间越长味道越浓。  \n\n6. 取出茶包或过滤茶叶，倒入杯中。  \n\n7. 根据个人口味加入糖、蜂蜜、牛奶或柠汁等调味。  \n\n8. 轻轻搅拌，确保所有调味料均匀。  \n\n9. 享用热腾腾的茶，或放凉后饮用。  \n\n10. 清理器具：冲洗壶、杯、过滤网，保持干净。  \n\n完成！祝你喝得愉快。",
+      "reasoning": "Need numbered list in Chinese.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 43,
+      "kind": "format",
+      "prompt": "用表格对比 Python 和 JavaScript 的异同（两列）。",
+      "response": "**Python vs JavaScript（两列对比）**\n\n| 维度 | **Python** | **JavaScript** |\n|------|-------------|----------------|\n| **语法风格** | 采用缩进制（indentation）来表示代码块，强调可读性。 | 采用大括号 `{}` 来表示代码块，语法更接近 C 语言。 |\n| **类型系统** | 静态类型（可选）+ 运行时动态类型，支持类型提示（`typing` 模块）。 | 动态类型，所有变量均为 `var/let/const`，类型在运行时决定。 |\n| **函数定义** | `def foo():`，支持默认参数、可变参数、关键字参数。 | `function foo() {}` 或 `const foo = () => {}`，支持默认参数、剩余参数。 |\n| **模块化** | `import module` / `from module import name`，模块文件以 `.py` 结尾。 | `import module` / `export`，模块文件以 `.js` 结尾，支持 ES6 模块。 |\n| **面向对象** | 类是第一类对象，支持多重继承、属性装饰器（`@property`）。 | 类是语法糖，内部仍为原型链，支持 `class` 关键字。 |\n| **异常处理** | `try/except/else/finally`，异常类可自定义。 | `try/catch/finally`，异常对象为 `Error` 或其子类。 |\n| **并发/异步** | 通过 `asyncio`、`threading`、`multiprocessing` 等实现。 | 通过 `Promise`、`async/await`、`Web Workers` 等实现。 |\n| **标准库** | 丰富且统一，包含 `os`, `re`, `json`, `datetime` 等。 | 生态多样，核心库较小，依赖第三方包（如 `lodash`、`axios`）。 |\n| **运行环境** | 主要为解释器（CPython、PyPy 等），可编译为字节码。 | 主要为浏览器或 Node.js，运行在 V8/SpiderMonkey 等引擎。 |\n| **语义** | 代码块以缩进制决定，变量作用域为函数级（`global`、`local`）。 | 代码块以大括号决定，变量作用域为块级（`let/const`）或函数级（`var`）。 |\n| **可读性** | 语法简洁，强调“可读性优先”。 | 语法灵活，允许多种写法，易出现“可读性差”。 |\n| **社区与生态** | 适合科学计算、数据分析、后端服务。 | 适合前端开发、全栈开发、移动端（React Native）。 |\n| **学习曲线** | 语法直观，适合初学者。 | 语法多变，需掌握闭包、原型链等概念。 |\n| **跨平台** | 通过解释器可在 Windows/Linux/macOS/Android/IOS 等运行。 | 通过浏览器/Node.js 可在同平台运行，移动端需打包。 |\n\n> **总结**  \n> - **相同点**：两者都是高级动态语言，支持函数式与面向对象编程，均有异步/并发机制。  \n> - **不同点**：Python 更强调可读性与统一的标准库；JavaScript 更贴近 Web 生态，语法更灵活，模块化与异步机制更成熟。",
+      "reasoning": "Need table with two columns: Python vs JavaScript differences/similarities. Provide comparison.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 44,
+      "kind": "format",
+      "prompt": "用要点列出远程办公的三个优缺点。",
+      "response": "**远程办公（Remote Work）优点**  \n1. **灵活性与时间自由**  \n   - 员工可根据个人节奏安排工作时间，减少通勤时间与成本。  \n2. **成本节约**  \n   - 企业可削减办公场地租金、设备、能源等固定支出；员工亦省交通与餐饮费用。  \n3. **人才池扩大**  \n   - 不受地理限制，可招聘全国乃至全球优秀人才，提升团队多元化与创新力。  \n\n**远程办公缺点**  \n1. **沟通与协作障碍**  \n   - 远程缺少面对面互动，易产生信息误读、延迟反馈，影响项目进度。  \n2. **工作与生活边界模糊**  \n   - 家中工作容易与私生活交叉，导致过劳、注意力分散，影响工作效率与身心健康。  \n3. **安全与数据风险**  \n   - 需依赖个人网络与设备，若防护不足易遭网络攻击、数据泄露或设备丢失。",
+      "reasoning": "Need bullet points, three pros and cons.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 45,
+      "kind": "format",
+      "prompt": "把下面信息整理成两栏：优点 / 缺点。",
+      "response": "请把需要整理的具体信息发给我，我会帮您把它们归纳成“优点”和“缺点”两栏。",
+      "reasoning": "We need to produce two columns: 优点 and 缺点. But we need the information. The user didn't provide the info. Probably they omitted. We should ask for the info.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": false
+    },
+    {
+      "idx": 46,
+      "kind": "format",
+      "prompt": "用时间线形式描述一天的工作安排。",
+      "response": "**一天的工作时间线（示例）**\n\n| 时间 | 任务 | 备注 |\n|------|------|------|\n| **06:30 – 07:00** | 起床、晨练 | 轻度拉伸、冥想5分钟 |\n| **07:00 – 07:30** | 早餐 & 个人事务 | 记录今日目标 |\n| **07:30 – 08:00** | 通勤/通勤视频 | 关注行业资讯 |\n| **08:00 – 08:30** | 会议准备 | 复盘前一天会议纪要 |\n| **08:30 – 10:00** | 重点项目工作 | 代码/文档/设计 |\n| **10:00 – 10:15** | 站立休息 | 眼保健、伸展 |\n| **10:15 – 12:00** | 继续项目 | 解决技术难点 |\n| **12:00 – 13:00** | 午餐 & 休息 | 轻松散步 |\n| **13:00 – 14:30** | 客户/团队沟通 | 线上/线下会议 |\n| **14:30 – 14:45** | 休息 | 眼保健、喝水 |\n| **14:45 – 16:30** | 任务执行 | 代码提交、测试 |\n| **16:30 – 17:00** | 日终总结 | 记录完成度、待办 |\n| **17:00 – 18:00** | 通勤/通勤视频 | 关注行业资讯 |\n| **18:00 – 19:00** | 晚餐 & 家庭时间 | 轻松聊天 |\n| **19:00 – 20:30** | 个人学习 | 读书/在线课程 |\n| **20:30 – 21:00** | 运动 | 跑步/健身 |\n| **21:00 – 22:00** | 放松 | 看剧/听音乐 |\n| **22:00 – 22:30** | 预备次日 | 规划日程、整理文件 |\n| **22:30** | 就寝 | 目标：睡眠7-8小时 |\n\n> **小贴士**  \n> - 每个任务块后留5-10分钟的“缓冲”时间，防止时间溢出。  \n> - 关键任务优先安排在上午精力高峰期。  \n> - 通过番茄钟（25min工作+5min休息）提升专注。  \n\n这样既能把握住日程，又能留足休息与学习空间。祝你工作顺利！",
+      "reasoning": "Need Chinese answer with timeline.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 47,
+      "kind": "format",
+      "prompt": "用加粗标题 + 列表写一份购物清单。",
+      "response": "**🛒 购物清单**\n\n| 序号 | 商品 | 规格/数量 | 备注 |\n|------|------|-----------|------|\n| 1 | 牛奶 | 1L × 2 | 低脂 |\n| 2 | 面包 | 12个 | 全麦 |\n| 3 | 鸡蛋 | 12枚 | 有机 |\n| 4 | 西红柿 | 3个 | 选熟 |\n| 5 | 黄瓜 | 2根 | 低盐 |\n| 6 | 苹果 | 6个 | 进口 |\n| 7 | 香蕉 | 1串 | 选熟 |\n| 8 | 牛肉 | 500g | 里脊 |\n| 9 | 鸡胸 | 400g | 去皮 |\n|10 | 豆腐 | 300g | 软豆腐 |\n|11 | 绿豆 | 200g | 冷冻 |\n|12 | 绿叶菜 | 1束 | 预洗 |\n|13 | 洋葱 | 2根 | 选细 |\n|14 | 姜 | 1块 | 约10g |\n|15 | 蒜 | 5瓣 | 选新鲜 |\n|16 | 酱油 | 250ml | 低盐 |\n|17 | 料酒 | 100ml | 选无味 |\n|18 | 盐 | 200g | 细盐 |\n|19 | 胡椒 | 50g | 黑胡椒 |\n|20 | 油 | 200ml | 橄榄油 |\n|21 | 罐头番茄酱 | 1罐 | 400g |\n|22 | 罐头玉米 | 1罐 | 300g |\n|23 | 罐头豆角 | 1罐 | 250g |\n|24 | 罐头青豆 | 1罐 | 250g |\n|25 | 罐头玉米 | 1罐 | 250g |\n|26 | 罐头玉米 | 1罐 | 250g |\n|27 | 罐头玉米 | 1罐 | 250g |\n|28 | 罐头玉米 | 1罐 | 250g |\n|29 | 罐头玉米 | 1罐 | 250g |\n|30 | 罐头玉米 | 1罐 | 250g |\n|31 | 罐头玉米 | 1罐 | 250g |\n|32 | 罐头玉米 | 1罐 | 250g |\n|33 | 罐头玉米 | 1罐 | 250g |\n|34 | 罐头玉米 | 1罐 | 250g |\n|35 | 罐头玉米 | 1罐 | 250g |\n|36 | 罐头玉米 | 1罐 | 250g |\n|37 | 罐头玉米 | 1罐 | 250g |\n|38 | 罐头玉米 | 1罐 | 250g |\n|39 | 罐头玉米 | 1罐 | 250g |\n|40 | 罐头玉米 | 1罐 | 250g |\n|41 | 罐头玉米 | 1罐 | 250g |\n|42 | 罐头玉米 | 1罐 | 250g |\n|43 | 罐头玉米 | 1罐 | 250g |\n|44 | 罐头玉米 | 1罐 | 250g |\n|45 | 罐头玉米 | 1罐 | 250g |\n|46 | 罐头玉米 | 1罐 | 250g |\n|47 | 罐头玉米 | 1罐 | 250g |\n|48 | 罐头玉米 | 1罐 | 250g |\n|49 | 罐头玉米 | 1罐 | 250g |\n|50 | 罐头玉米 | 1罐 | 250g |\n\n> **温馨提示**  \n> - 记得检查保质期  \n> - 适量购买，避免浪费  \n> - 购物前先列清单，省时省力  \n\n祝你购物愉快！",
+      "reasoning": "Need Chinese answer with bold title and table.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 48,
+      "kind": "format",
+      "prompt": "把「苹果、香蕉、橙子」用无序列表输出。",
+      "response": "- 苹果  \n- 香蕉  \n- 橙子",
+      "reasoning": "Need markdown unordered list.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 49,
+      "kind": "format",
+      "prompt": "用代码块包裹一句 hello world（任意语言）。",
+      "response": "```python\nprint(\"hello world\")\n```",
+      "reasoning": "Need code block with hello world in any language.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 50,
+      "kind": "chat",
+      "prompt": "你觉得养猫好还是养狗好？",
+      "response": "### 养猫 vs 养狗：从不同角度来比较\n\n| 维度 | 养猫的优势 | 养狗的优势 |\n|------|-------------|-------------|\n| **空间需求** | 适合公寓、单身或小户型；不需要大面积 | 需要较大空间，尤其是有院子或经常外出 |\n| **时间投入** | 只需每天喂食、清理猫砂，偶尔陪玩 | 需要每天遛弯、训练、洗澡等 |\n| **独立性** | 猫咪大多独立，能自己玩耍、清洁 | 狗狗更依赖主人的陪伴，需更多互动 |\n| **卫生** | 猫咪自我清洁，猫砂可一次性处理 | 狗狗需要定期洗澡、清理毛发 |\n| **训练** | 训练相对困难（如厕训练、指令） | 训练相对容易（如坐下、握手） |\n| **情感联结** | 猫咪温柔、亲密但不易被误解 | 狗狗更显忠诚、热情、易与人共情 |\n| **健康益处** | 低过敏、低噪音、可减轻度焦虑 | 运动量大、可提升心肺功能、社交 |\n| **费用** | 猫咪一次性猫砂、疫苗、常规检查 | 狗狗需要更频繁的疫苗、洗澡、训练 |\n\n---\n\n## 你需要考虑的几个关键点\n\n1. **生活方式**  \n   - **工作繁忙**：猫咪更适合。  \n   - **喜欢户外运动**：狗狗更合适。\n\n2. **居住环境**  \n   - **公寓/小户型**：猫咪更易适应。  \n   - **有院子/大户型**：狗狗更能发挥。\n\n3. **对宠物的期望**  \n   - **想要“独立”伙伴**：猫咪。  \n   - **想要“陪伴”伙伴**：狗狗。\n\n4. **预算**  \n   - **一次性投入**：猫咪（猫砂、一次性清洁）。  \n   - **长期投入**：狗狗（洗澡、训练、运动）。\n\n---\n\n## 结论\n\n- **如果你**：  \n  - 住在小户型或公寓，工作繁忙，想要一个相对“低维护”的伙伴，**养猫**更合适。  \n  - 住在大户型或有院子，喜欢户外运动，想要一个“忠诚、热情”的伙伴，**养狗**更合适。\n\n- **最重要的是**：先评估自己的时间、空间、预算与对宠物的期望，再决定。无论猫狗，都是需要爱与责任的伙伴。祝你找到最适合自己的宠物！",
+      "reasoning": "Need to answer in Chinese, discuss pros/cons.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 51,
+      "kind": "chat",
+      "prompt": "周末不知道去哪玩，给点建议？",
+      "response": "当然可以！下面给你几种不同类型的周末游玩建议，按你可能的兴趣和时间安排来挑选：\n\n| 玩法 | 适合人群 | 主要亮点 | 需要准备 | 预算估算 |\n|------|----------|----------|----------|----------|\n| **城市探险** | 想在城市里挖掘新鲜事物 | 特色街区、主题咖啡、手作市集 | 轻装、相机、地图 | 30–80 元/人 |\n| **自然漫步** | 想放松身心、亲近大自然 | 国家公园、山间小径、湖边垂钓 | 防晒、登山鞋、水壶 | 50–200 元/人 |\n| **文化沉浸** | 对历史、艺术感兴趣 | 博物馆、古迹、剧院 | 票价、导览手册 | 80–150 元/人 |\n| **美食之旅** | 追求味蕴、吃货 | 夜市、特色小吃、农贸市 | 现金、口味偏好 | 30–120 元/人 |\n| **亲子乐园** | 家庭出游 | 主题乐园、动物园、亲子DIY | 票价、儿童用品 | 120–300 元/人 |\n| **自驾游** | 想自由掌控行程 | 路线规划、风景点、加油站 | 车、导航、行车证 | 200–500 元/人 |\n\n---\n\n## 1. 城市探险：**“旧城新味”路线**  \n- **地点**：如果你在北上，建议去**北京**的**什刹街**或**上海**的**田子路**。  \n- **行程**：  \n  1. 早上街头的**小吃摊**（豆汁、糖葫）  \n  2. 逛**手作市集**（手工皮具、木雕）  \n  3. 参观**旧城墙**或**老街巷**的**文创店**  \n  4. 晚上去**酒吧**或**咖啡**喝一杯**手冲**  \n- **小贴士**：带上轻便背包，随时拍照；如果你想更深入，下载**城市探险APP**，跟随“探险路线”即可。\n\n## 2. 自然漫步：**“山水一线”**  \n- **地点**：**杭州**的**九溪**、**成都**的**青城山**、**重庆**的**武隆山**。  \n- **行程**：  \n  1. 早起**徒步**至**观景点**（如**云端**、**石门**）  \n  2. 途中**野餐**（自带三明、果蔬）  \n  3. 结束后**泡温泉**（如**九寨温泉**）  \n- **小贴士**：穿**防滑鞋**，带**防晒霜**，若携带**相机**，记得**多角度**拍摄。\n\n## 3. 文化沉浸：**“博物馆+剧院”**  \n- **地点**：**北京**的**故宫**、**上海**的**上海博物馆**、**广州**的**广东省博物馆**。  \n- **行程**：  \n  1. 先**参观****展览**（如**“古代陶瓷”）  \n  2. 之后**听讲解**（若有导览）  \n  3. 晚上**看****地方戏剧**（如**京剧、越剧）  \n- **小贴士**：提前**网上购票**，避免排队；若你对**艺术**感兴趣，可带**笔记本**记录感想。\n\n## 4. 美食之旅：**“夜市+农贸市”**  \n- **地点**：**成都**的**锦里**、**广州**的**上下九**、**武汉**的**户部巷**。  \n- **行程**：  \n  1. 先**逛****夜市**（如**“夜市”）  \n  2. 选**特色小吃**（如**“麻辣烤鱼”）  \n  3. 之后**去****农贸市**（如**“农贸市”）  \n  4. 结束后**喝****当地**（如**“豆浆”）  \n- **小贴士**：带**现金**，因为很多摊位不支",
+      "reasoning": "Need suggestions.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 52,
+      "kind": "chat",
+      "prompt": "我有点焦虑，能陪我聊会儿吗？",
+      "response": "当然可以，我在这里陪着你。先说说你现在最想聊的是什么？是想聊聊最近的生活、工作、学习，还是想聊聊心里那份焦虑的根源？你可以随便说，我会尽量帮你理清思路，或者只是单纯地听你说。无论你想聊什么，我都会耐心地陪着你。",
+      "reasoning": "Need supportive response.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 53,
+      "kind": "chat",
+      "prompt": "推荐几部适合晚上看的轻松电影。",
+      "response": "下面这几部轻松、适合晚上放松心情的电影，剧情不太沉重，节奏舒缓，适合在灯光暗淡、想要轻松享受的时刻观看：\n\n| 电影 | 主要类型 | 观看理由 | 推荐时段 |\n|------|----------|----------|----------|\n| **《当哈利遇见莎莉》** (When Harry Met Sally) | 经典浪漫喜剧 | 轻松幽默、对白机智，适合与朋友或伴侣一起看。 | 晚上 7–9 点 |\n| **《海边的曼彻斯特》** (The Grand Budapest Hotel) | 斯坦利·库布里克式喜剧 | 视觉风格独特、色彩绚丽，剧情轻盈，适合想要“逃离”日常。 | 晚上 8–10 点 |\n| **《疯狂的麦克斯》** (Crazy Rich Asians) | 轻松喜剧 | 轻松搞笑、情节不重，适合想要“放空”心情。 | 晚上 7–9 点 |\n| **《小妇人》** (Little Women) | 轻松剧情片 | 轻松温暖、情感细腻，适合想要“温柔”心情。 | 晚上 8–10 点 |\n| **《海边的日记》** (The Beach House) | 轻松剧情片 | 轻松温柔、情感细腻，适合想要“温柔”心情。 | 晚上 8–10 点 |\n| **《大鱼》** (Big Fish) | 轻松剧情片 | 轻松温柔、情感细腻，适合想要“温柔”心情。 | 晚上 8–10 点 |\n| **《大鱼》** (Big Fish) | 轻松剧情片 | 轻松温柔、情感细腻，适合想要“温柔”心情。 | 晚上 8–10 点 |\n| **《大鱼》** (Big Fish) | 轻松剧情片 | 轻松温柔、情感细腻，适合想要“温柔”心情。 | 晚上 8–10 点 |\n| **《大鱼》** (Big Fish) | 轻松剧情片 | 轻松温柔、情感细腻，适合想要“温柔”心情。 | 晚上 8–10 点 |\n| **《大鱼》** (Big Fish) | 轻松剧情片 | 轻松温柔、情感细腻，适合想要“温柔”心情。 | 晚上 8–10 点 |\n\n> **小贴士**  \n> 1. 选片时可先看预告或片段，确认剧情是否符合自己的轻松需求。  \n> 2. 电影配合舒适的光线、柔软的沙发，营造“放空”氛围。  \n> 3. 若想更轻松，可配合轻音乐或轻茶，提升整体体验。  \n\n祝你有个愉快的夜晚观影时光！",
+      "reasoning": "Need list of light movies for evening. Provide Chinese titles and brief.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 54,
+      "kind": "chat",
+      "prompt": "怎么才能坚持每天运动？",
+      "response": "坚持每天运动其实并不需要你一开始就把自己逼得“痛不欲生”，而是要把运动变成一种“生活习惯”，让它像喝水、刷牙一样自然。下面给你几个实用的技巧，帮助你把运动融进日常，真正做到“天天动”。\n\n---\n\n## 1. 先设定“可实现”的目标\n\n| 目标 | 说明 | 例子 |\n|------|------|------|\n| **短期** | 先从“每天 10 分钟”开始，慢慢加。 | 早上班前跑步 10 分钟，或午休后快走 10 分钟。 |\n| **中期** | 目标是“每周 3 次”或“每周 150 分钟”。 | 每周三次跑步 30 分钟，或每周三次瑜伽 45 分钟。 |\n| **长期** | 目标是“保持健康体重/跑完 5 公里”。 | 6 个月后跑完 5 公里。 |\n\n> **为什么要先设短期目标？**  \n> 目标太大容易让你失去动力；短期目标完成后会给你即时的成就感，激励你继续。\n\n---\n\n## 2. 把运动“时间化”——固定时间表\n\n| 方案 | 适用场景 | 细节 |\n|------|----------|------|\n| **晨间** | 你早起，先做 10 分钟伸展。 | 先把闹钟往前 5 分钟，起床后先做伸展。 |\n| **午休** | 午饭后散步 10 分钟。 | 走到楼下，顺路去洗手间。 |\n| **晚间** | 晚饭后 20 分钟慢跑。 | 先把跑鞋放在床头，饭后直接穿。 |\n\n> **技巧**：把运动时间写进日历或手机提醒，和吃饭、刷牙一样固定。\n\n---\n\n## 3. 让运动“多样化”\n\n| 运动 | 适合人群 | 频率 |\n|------|----------|------|\n| 跑步 | 体能好 | 每周 2 次 |\n| 瑜伽 | 需要柔韧 | 每周 2 次 |\n| 家庭健身 | 需要省钱 | 每周 3 次 |\n| 运动游戏 | 需要乐趣 | 每周 1 次 |\n\n> **为什么多样化？**  \n> 同一件事做久了会产生厌倦；多样化让你保持新鲜感。\n\n---\n\n## 4. 记录与反馈\n\n| 工具 | 用途 | 例子 |\n|------|------|------|\n| **运动日记** | 记录时间、强度、感受 | 记录“跑步 30 分钟，心率 140” |\n| **App** | 自动提醒、统计 | Strava、Nike Run Club |\n| **伙伴** | 互相监督 | 组个跑步小组 |\n\n> **小技巧**：把运动记录放在手机锁屏上，看到就想起。\n\n---\n\n## 5. 设定“奖励”与“惩罚”\n\n| 设定 | 说明 | 例子 |\n|------|------|------|\n| **奖励** | 每周完成 3 次运动后，给自己 1 次电影。 | 运动后看一部电影。 |\n| **惩罚** | 每次缺席 1 次，给自己 5 分钟的“自我惩罚”——比如多吃 1 次甜点。 | 运动后吃 1 份甜点。 |\n\n> **注意**：奖励要正向，惩罚要轻微，避免心理负担。\n\n---\n\n## 6. 让运动“社交化”\n\n| 方式 | 说明 | 例子 |\n|------|------|------|\n| **运动伙伴** | 互相监督、互相鼓励 | 组个跑步小组 |\n| **社交活动** | 参加社区跑步、健身班 | 参加社区跑步 |\n| **线上社群** | 互相分享进度 | 加入跑步社群 |\n\n> **为什么社交化？**  \n> 朋友的鼓励能让你更有动力。\n\n---\n\n## 7. 关注身体信号，避免过度\n\n| 信号 | 说",
+      "reasoning": "Need to give advice in Chinese.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 55,
+      "kind": "chat",
+      "prompt": "为什么天是蓝的？",
+      "response": "**为什么天空是蓝色的？**\n\n---\n\n### 1. 光的本质\n\n- **可见光**（400–700 nm）是电磁波，波长越短颜色越靠蓝端，波长越长颜色越靠红端。\n- 太阳光谱几乎是连续的，包含所有可见波长。\n\n---\n\n### 2. 大气分子对光的散射\n\n- 当光波通过空气时，遇到空气分子（主要是 N₂、O₂）和微小颗粒。\n- 这些分子对光的散射强度与波长 λ 的四次方成反比：  \n  \\[\n  I_{\\text{scat}}\\propto \\frac{1}{\\lambda^{4}}\n  \\]\n  这就是 **Rayleigh 散射**（Rayleigh scattering）。\n\n- 结果：短波长（蓝、紫）被散射得比长波长（红、黄）强得多。\n\n---\n\n### 3. 观察角度与光路\n\n- **直射光**（从太阳直射到眼睛）几乎不被散射，保持原始颜色。\n- **散射光**：光在大气中被多次散射后，几乎均匀地向各个方向传播。  \n  由于蓝光散射强，天空中大多数光线都是蓝色。\n\n---\n\n### 4. 其它影响因素\n\n| 影响 | 说明 |\n|------|------|\n| **大气成分** | 主要是 N₂、O₂；分子尺寸与 λ⁴ 成比例，导致蓝光散射强。 |\n| **大气污染** | 细小颗粒（PM2.5 等）会产生 **Mie 散射**，对所有波长几乎均匀，导致天空变灰或黄。 |\n| **太阳高度** | 太阳越低，光路越长，蓝光被散射得越多，天空更蓝；但当太阳接近地平线时，蓝光被散射得太多，剩下来的光多为红、黄，天空变红。 |\n| **紫光** | 虽紫光散射更强，但人眼对紫光的敏感度低，且大气中紫光被吸收，故我们看到的是蓝而非紫。 |\n\n---\n\n### 5. 直观实验\n\n1. **把一束白光（如激光）通过空气**：用光谱仪测量，蓝光成分明显增强。\n2. **把光束通过一块玻璃**：几乎无散射，光保持原始颜色。\n3. **把光束通过细小颗粒（如雾）**：散射均匀，天空呈灰白。\n\n---\n\n### 6. 结论\n\n天空之蓝是**Rayleigh 散射**的直接结果：短波长的蓝光在大气分子中被散射得远比长波长的红光强，导致我们从任何方向看到的天空光主要是蓝色。若大气中存在大量细小颗粒或污染物，散射会变得更均匀，天空颜色会变灰或黄；若太阳低角度，蓝光被散射得更彻底，天空呈红黄。",
+      "reasoning": "Explain Rayleigh scattering.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 56,
+      "kind": "chat",
+      "prompt": "帮我起个游戏 ID，要酷一点。",
+      "response": "**酷炫游戏 ID 选项（可直接使用或稍作改动）**\n\n| 序号 | ID 名称 | 说明 |\n|------|----------|------|\n| 1 | **霜影猎手** | “霜”给人寒冷、锋利之感，猎手暗示精准与速度。 |\n| 2 | **星尘狂潮** | 星尘象征宇宙与神秘，狂潮则是力量与冲击。 |\n| 3 | **零界幽影** | 零界暗示无尽头，幽影则是神秘与潜行。 |\n| 4 | **雷霆破晓** | 雷霆（雷霆）给人轰鸣、破坏之感，破晓象征黎明与新生。 |\n| 5 | **暗焰行者** | 暗焰是黑暗与烈焰的混合，行者暗示自由与探索。 |\n| 6 | **星辰逆行** | 星辰象征星光与命运，逆行暗示不羁与反叛。 |\n| 7 | **影刃无声** | 影刃给人暗影与锋利之感，无声则是沉默与致命。 |\n| 8 | **霜锋星尘** | 霜锋给人寒冷与锋利，星尘象征宇宙与神秘。 |\n| 9 | **零光狂潮** | 零光暗示无尽头，狂潮象征力量与冲击。 |\n|10 | **雷霆星辰** | 雷霆给人轰鸣、破坏之感，星辰象征星光与命运。 |\n\n**使用技巧**\n\n1. **组合**：把两种元素混合，例如 “霜影猎手 + 零界幽影” → **霜影零界**。  \n2. **简化**：如果你想更短一点，可以删掉“猎手”“行者”等后缀，直接用核心词。  \n3. **拼音**：把中文拼音写成英文或数字，例如 “霜影猎手” → **S1ngYing**。  \n4. **加前缀/后缀**：如 “X-星尘狂潮” 或 “影刃-无声”。  \n\n挑一个你最喜欢的，或者把几个词拼在一起，形成一个独一无二的酷炫 ID！祝你游戏愉快，战绩连连！",
+      "reasoning": "Need cool game ID suggestions. Provide Chinese? Probably.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 57,
+      "kind": "chat",
+      "prompt": "生活太累了，有什么调节情绪的方法？",
+      "response": "**生活太累了，情绪容易失控？**  \n下面给你一份“情绪调节小手册”，把它当成一张“情绪地图”，在你需要的时候随时翻阅。每个方法都可以单独使用，也可以组合搭配，找到最适合自己的节奏。\n\n---\n\n## 1. 先把身体调好\n\n| 方法 | 说明 | 适用场景 |\n|------|------|----------|\n| **深呼吸** | 4秒吸气，4秒屏气，4秒呼气，4秒停留。循环3–5次。 | 会议前、上班路上、睡前 |\n| **短暂步行** | 走5–10分钟，注意脚步与呼吸同步。 | 工作间隙、午休 |\n| **伸展运动** | 颈部、肩部、腰部轻柔伸展。 | 长时间坐着、电脑前 |\n| **喝温水** | 1–2杯温水，加入一点柠檬。 | 早晨、午后、睡前 |\n\n> **小贴士**：身体的舒适感会直接影响情绪的稳定度。先把身体放松，情绪自然跟着走。\n\n---\n\n## 2. 让情绪“说话”\n\n| 方法 | 说明 | 适用场景 |\n|------|------|----------|\n| **写情绪日记** | 记录当下情绪、触发点、当时想法。 | 任何情绪波动 |\n| **情绪标签** | 给情绪贴标签：愤怒、焦虑、失落、愉悦。 | 需要客观化情绪时 |\n| **情绪对话** | 对自己说：“我现在很焦虑，因为……”，再说“我可以做什么？” | 需要自我对话时 |\n\n> **小贴士**：把情绪写下来，能让它们“站出来”，不再“藏在心里”。\n\n---\n\n## 3. 让情绪“走路”\n\n| 方法 | 说明 | 适用场景 |\n|------|------|----------|\n| **情绪散步** | 走路时想象情绪像气球，慢慢把它推向远方。 | 需要快速放空时 |\n| **情绪投射** | 把情绪想象成一束光，投射到某个安全空间（如海边、山顶）。 | 需要情绪“离场”时 |\n| **情绪“倒数”** | 1→10，数到10时情绪会“淡化”。 | 需要快速冷静时 |\n\n> **小贴士**：把情绪从身体里“走出来”，能让它们不再“占据”你。\n\n---\n\n## 4. 让情绪“变味”\n\n| 方法 | 说明 | 适用场景 |\n|------|------|----------|\n| **情绪调味** | 让情绪变成“甜味”“咸味”“苦味”，再想象它的味道。 | 需要情绪“再解读”时 |\n| **情绪“配乐”** | 选一首轻音乐，配合情绪节奏。 | 需要情绪“伴奏”时 |\n| **情绪“配色”** | 让情绪对应颜色，想象它的色彩。 | 需要情绪“可视化”时 |\n\n> **小贴士**：情绪的“味道”会让它们更易被“品尝”，从而更易被“消化”。\n\n---\n\n## 5. 让情绪“做事”\n\n| 方法 | 说明 | 适用场景 |\n|------|------|----------|\n| **情绪“任务化”** | 把情绪拆成可执行的小任务。 | 需要情绪“行动化”时 |\n| **情绪“目标化”** | 设定情绪处理目标：如“把愤怒转成提问”。 | 需要情绪“方向化”时 |\n| **情绪“时间盒”** | 给情绪限定时间：如“我有5分钟来处理愤怒”。 | 需要情绪“时限化”时 |\n\n> **小贴士**：把情绪变成可执行的任务，能让它们不再“无所适从”。\n\n---\n\n## 6. 让情绪“休息”\n\n| 方法 | 说明 | 适用场景 |\n|------|------|----------|\n| **情绪“睡眠”** | 让情绪在睡前“关机”，不再被唤醒。 | 睡前 |",
+      "reasoning": "Need to give methods.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 58,
+      "kind": "chat",
+      "prompt": "你觉得读书和刷短视频哪个更有收获？",
+      "response": "读书和刷短视频都是获取信息的方式，但它们在深度、质量、持久性等方面有本质区别。下面从几个维度来对比，帮助你判断哪种方式更适合自己的目标。\n\n| 维度 | 读书 | 刷短视频 |\n|------|------|-----------|\n| **信息深度** | 通常能系统、连贯地展开一个主题，提供背景、案例、推理、引用等，帮助你形成完整的知识框架。 | 以碎片化、快速的方式呈现，往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往往",
+      "reasoning": "Need answer in Chinese. Provide comparison.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    },
+    {
+      "idx": 59,
+      "kind": "chat",
+      "prompt": "如何跟不太熟的人破冰？",
+      "response": "**跟不太熟的人破冰，关键是让对方感到轻松、被尊重、并且能自然展开话题。下面给你一套“实用”步骤，按场景（工作、社交、线上）细分，帮助你快速上手。**\n\n---\n\n## 1. 先做“自我”铺垫\n\n| 步骤 | 目的 | 典型句式 |\n|------|------|----------|\n| **1.1** 先给对方一个微笑、点头，示意礼貌 | 打破“陌生”壁垒 | “嗨，今天真好天气啊！” |\n| **1.2** 先说一句“我”——“我叫…”“我来自…”“我最近在…” | 让对方知道你也有“身份” | “我叫小李，最近在做…工作。” |\n| **1.3** 让对方说“你”——“你呢？” | 让对方主动分享 | “你呢？你从事什么？” |\n\n> **小技巧**：用“我”+“你”结构，能让对方自然进入自我+自我模式，减少尴尬。\n\n---\n\n## 2. 选对话题：**“共同点”+“好奇点”\n\n| 话题 | 说明 | 例子 |\n|------|------|------|\n| **共同点** | 任何能让双方都说“我也一样”的事 | “你也喜欢看电影吗？” |\n| **好奇点** | 对方的兴趣、工作、生活 | “我听说你在做…，能跟我说说吗？” |\n\n> **注意**：避免“深度”太高的个人问题（如收入、家庭），先把“浅层”聊好。\n\n---\n\n## 3. 让对方“说话”——**“开放式提问”\n\n| 提问类型 | 目的 | 例子 |\n|----------|------|------|\n| **开放式** | 让对方有空间展开 | “你最近最喜欢的电影是什么？” |\n| **探究式** | 让对方回忆细节 | “你是怎么开始对…感兴趣的？” |\n| **共情式** | 让对方感到你在倾听 | “听起来你很…，那一定很…。” |\n\n> **技巧**：用“你觉得”“你认为”“你觉得怎样”来让对方主动表达。\n\n---\n\n## 4. 适时“共情”与“共感”\n\n| 方式 | 目的 | 例子 |\n|------|------|------|\n| **共情** | 让对方觉得你“懂” | “我也有过类似的经历。” |\n| **共感** | 让对方感到你“在同场” | “我也觉得那件事挺…。” |\n\n> **注意**：共情要真诚，避免“假同情”。\n\n---\n\n## 5. 适度“自我”反映\n\n| 反映 | 目的 | 例子 |\n|------|------|------|\n| **自我反映** | 让对方更愿意分享 | “我也想知道你怎么做的。” |\n| **自我补充** | 让对方更了解你 | “我在…工作，最喜欢的是…。” |\n\n> **技巧**：自我反映要“短小”，避免把话题拉回自己。\n\n---\n\n## 6. 结束时留“余地”\n\n| 结束方式 | 目的 | 例子 |\n|----------|------|------|\n| **开放式** | 让对方有机会继续 | “如果你还有想聊的，随时说。” |\n| **邀请式** | 让对方主动回访 | “下次我们一起…？” |\n\n> **小技巧**：用“如果你想再聊，我很乐意”来给对方“自由度”。\n\n---\n\n## 7. 场景细化\n\n| 场景 | 关键点 | 典型句式 |\n|------|--------|----------|\n| **工作场合** | 先说“我在…工作”，再问“你在…？” | “我在做…，你在…？” |\n| **社交聚会** | 先说“我刚到这里”，再问“你怎么认识这里？” | “我刚到这里，你怎么认识？”",
+      "reasoning": "Need Chinese answer. Provide tips.",
+      "error": "",
+      "refusal": false,
+      "contaminated": false,
+      "passed": true
+    }
+  ],
+  "gate_fails": [],
+  "timestamp": 1794051278.6831338
+}

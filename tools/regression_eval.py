@@ -146,7 +146,7 @@ CONTAM_PATTERNS = [
 TAG_RE = re.compile(r"(?s)</?(confidence|need_search)>")
 
 # 题面本身有缺陷的题（模型的行为其实是对的），不计入统计
-EXCLUDE_IDX = {46: "题面未给出待整理的信息，模型要求补充属于正确行为"}
+EXCLUDE_IDX = {45: "题面未给出待整理的信息，模型要求补充属于正确行为"}
 
 
 def strip_tags(text: str) -> str:
