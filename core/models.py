@@ -89,7 +89,7 @@ TIERS: list[dict] = [
         "limits": ["多步循环易绕圈，需 Agent 框架兜底",
                    "权重 10.8GB：8GB 卡要把部分层卸载到内存，实测约 20 t/s（Core 3B 为 110 t/s）"],
         "capabilities": ["agent", "code", "reason"],
-        "defaults": {"num_ctx": 16384, "temperature": 0.55, "reasoning": "medium"},
+        "defaults": {"num_ctx": 16384, "temperature": 0.55, "reasoning": "low"},
     },
     {
         "id": "minise",

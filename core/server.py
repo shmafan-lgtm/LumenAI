@@ -698,6 +698,12 @@ class LumonHTTPServer(ThreadingHTTPServer):
 
 
 def serve(port: int | None = None) -> ThreadingHTTPServer:
+    # 开机即启动「全网知识自动吸收」（后台非阻塞，不影响对话）
+    try:
+        from . import knowledge
+        knowledge.start()
+    except Exception:
+        pass
     st = config.settings()
     want = int(port or (st.get("remote") or {}).get("port", 8770))
     port = pick_port(want)

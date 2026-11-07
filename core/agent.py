@@ -10,7 +10,7 @@ import time
 import uuid
 from typing import Callable, Iterator
 
-from . import config, engine, models, prompt, remote, search, store
+from . import config, engine, knowledge, models, prompt, remote, search, store
 
 TOOL_RE = re.compile(r'(?s)<tool\s+name="([a-zA-Z_]+)"\s*>(.*?)</tool>')
 # 小模型常见的几种「非标准」工具写法，解析层统一兜住
@@ -63,6 +63,12 @@ def _iter_json_objects(text: str) -> Iterator[str]:
         i = end + 1
 
 CREATE_NO_WINDOW = 0x08000000
+
+# 低把握度拒答闸口：模型自报把握度 ≤30% 且无证据时，直接「不会」并引导「进行尝试」。
+REFUSE_MSG = ("不会，你所问的问题我的把握度低于30%以下，解决的准确度很低，"
+             "如果你非要让我给你解决这个问题的话，可以给我发送“进行尝试”。")
+# 待「进行尝试」的会话（键：session_id）
+PENDING_TRY: dict[str, bool] = {}
 
 
 def _loose_json(s: str) -> dict:
@@ -1000,8 +1006,12 @@ class Runner:
         tier = models.resolve(st.get("tier", "h1"))
         se = st.get("search") or {}
         ag = st.get("agent") or {}
-        search_on = bool(se.get("enabled", True))
-        always_search = se.get("mode") == "always"
+        norm_msg = (user_text or "").strip().strip("。.")
+        force_try = (norm_msg == "进行尝试") and bool(PENDING_TRY.get(session_id))
+        if force_try:
+            PENDING_TRY.pop(session_id, None)
+        search_on = bool(se.get("enabled", True)) or force_try
+        always_search = (se.get("mode") == "always") or force_try
         threshold = int(se.get("threshold", 60))
         agent_ok = bool(ag.get("enabled", True)) and "agent" in (tier.get("capabilities") or [])
         max_steps = int(ag.get("max_steps", 6))
@@ -1025,6 +1035,8 @@ class Runner:
         if agent_ok and prompt.wants_tools(user_text):
             convo += prompt.TOOL_FEWSHOT
         convo.append({"role": "user", "content": user_text})
+        # 自动吸收到的全网新知（后台持续更新），稍后并入用户消息用于 RAG
+        kb_ctx = knowledge.relevant(user_text)
 
         sources: list[dict] = []
         searched = False
@@ -1084,6 +1096,12 @@ class Runner:
             except Exception as e:
                 config.log("error.log", f"pre-search: {e}")
 
+        # 把自动吸收到的全网新知并入用户消息（与预检索资料叠加）
+        if kb_ctx:
+            _last = convo[-1]
+            if _last.get("role") == "user":
+                _last["content"] = _last["content"] + "\n\n" + kb_ctx
+
         t_start = time.time()
         # 单轮任务的墙钟上限。20B 权重在 8GB 显卡上每步要 1~3 分钟，
         # 6 步能拖到 18 分钟 —— 用户等不起，卡住了也要给个交代。
@@ -1102,9 +1120,10 @@ class Runner:
             shown_parts: list[str] = []
             err = None
             _td = tier.get("defaults") or {}
+            reason_effort = (st.get("engine") or {}).get("reasoning_effort") or _td.get("reasoning")
             for ev in engine.stream_chat(convo,
                                         temperature=_td.get("temperature"),
-                                        reasoning_effort=_td.get("reasoning"),
+                                        reasoning_effort=reason_effort,
                                         # reasoning 的思考 token 也算在 max_tokens 里，
                                         # 给太小会让模型「想完就没了」，正文被截成空。
                                         max_tokens=int(_td.get("max_tokens") or 4096)):
@@ -1269,6 +1288,15 @@ class Runner:
                     continue
 
                 final_text = body_wo_tags
+                # —— 低把握度拒答闸口：模型自报把握度 ≤30% 且无证据 → 直接「不会」+ 进行尝试 ——
+                if conf is not None and conf <= 30 and not sources and not used_tools:
+                    self.emit({"type": "token", "text": REFUSE_MSG})
+                    self.emit({"type": "done", "sources": [], "confidence": conf,
+                               "tools": [], "engine": "model", "refused": True, "await_try": True})
+                    store.add_message(session_id, "assistant", REFUSE_MSG,
+                                     {"confidence": conf, "refused": True, "await_try": True})
+                    PENDING_TRY[session_id] = True
+                    return
                 # reasoning 模型（gpt-oss / R1 系）有时一轮全在思考里，
                 # 结论却没落地。这时别交白卷：把思考结果转成一句提示，
                 # 让用户知道发生了什么，而不是看到一个空回答。
