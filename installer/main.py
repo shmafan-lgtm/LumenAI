@@ -21,6 +21,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 
 import tkinter as tk
@@ -33,10 +34,133 @@ VERSION = "1.0.0"
 GITHUB_REPO = os.environ.get("LUMEN_GITHUB_REPO", "shmafan-lgtm/Lumen").strip()
 GITHUB_API = "https://api.github.com/repos/{repo}/releases/latest"
 
-# 模型档位：安装器可下载的权重（走 hf-mirror 直链）
+# 模型档位：安装器可下载的权重（走 hf-mirror 直链，国内更快）
+# 主基座是 gpt-oss-20b（用户明确要求不降档）；Core 3B 作为轻量兜底。
 MODEL_ASSETS = [
-    ("Qwen2.5-3B-Instruct-Q4_K_M.gguf", "Core 3B · 约 2.0 GB · 兜底档位，8GB 内存可跑"),
+    {
+        "file": "gpt-oss-20b-Q4_K_M.gguf",
+        "label": "gpt-oss-20b（20B MoE · 约 10.8 GB · 主基座，显存不足会自动卸载到内存运行）",
+        "bytes": 11624759488,
+        "urls": [
+            "https://hf-mirror.com/unsloth/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b-Q4_K_M.gguf",
+            "https://huggingface.co/unsloth/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b-Q4_K_M.gguf",
+        ],
+    },
+    {
+        "file": "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+        "label": "Core 3B（轻量兜底 · 约 2.0 GB · 内存小的机器也能跑）",
+        "bytes": 2104932768,
+        "urls": [
+            "https://hf-mirror.com/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",
+            "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",
+        ],
+    },
 ]
+
+
+def _selected_asset(label: str) -> dict:
+    for a in MODEL_ASSETS:
+        if a["label"] == label:
+            return a
+    return MODEL_ASSETS[0]
+
+
+def _http_get_parallel(url: str, dest: str, expect: int, on_progress=None,
+                       threads: int = 16) -> bool:
+    """多线程分块并行下载。
+
+    镜像单连接被限速在 ~0.7MB/s，10.8GB 要 4.6 小时；分块并行实测 4 分钟下完。
+    做法：解析 302 拿到最终签名 URL（支持 Range）→ 切块 → 各线程拉自己那段 →
+    seek 写回同一文件（区间互不重叠）。
+    """
+    part = dest + ".part"
+
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+
+    final = url
+    try:
+        op = urllib.request.build_opener(_NoRedirect())
+        with op.open(urllib.request.Request(url, method="HEAD",
+                                           headers={"User-Agent": "Lumen-Setup"}),
+                     timeout=60) as r:
+            final = r.geturl()
+    except urllib.error.HTTPError as e:
+        loc = e.headers.get("Location")
+        if loc:
+            final = loc
+    except Exception:
+        pass
+
+    total = expect or 0
+    if not total:
+        try:
+            op = urllib.request.build_opener()
+            with op.open(urllib.request.Request(final, headers={
+                    "Range": "bytes=0-0", "User-Agent": "Lumen-Setup"}), timeout=60) as r:
+                cr = r.headers.get("Content-Range", "")
+                total = int(cr.rsplit("/", 1)[1]) if "/" in cr else int(r.headers.get("Content-Length") or 0)
+        except Exception:
+            return False
+    if total <= 0:
+        return False
+
+    chunk = 64 * 1024 * 1024
+    nchunks = (total + chunk - 1) // chunk
+    try:
+        with open(part, "wb") as f:
+            f.truncate(total)
+    except OSError:
+        return False
+
+    state = {"got": 0}
+    lock = threading.Lock()
+
+    def work(i: int) -> None:
+        start = i * chunk
+        end = min(start + chunk, total) - 1
+        got = 0
+        for _ in range(5):
+            try:
+                req = urllib.request.Request(final, headers={
+                    "Range": f"bytes={start + got}-{end}", "User-Agent": "Lumen-Setup"})
+                op = urllib.request.build_opener()
+                with op.open(req, timeout=120) as r:
+                    with open(part, "r+b") as f:
+                        f.seek(start + got)
+                        while True:
+                            b = r.read(1 << 20)
+                            if not b:
+                                break
+                            f.write(b)
+                            got += len(b)
+                            with lock:
+                                state["got"] += len(b)
+                                g = state["got"]
+                            if on_progress:
+                                on_progress(g, total)
+            except Exception:
+                time.sleep(2)
+                continue
+            return
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=threads) as pool:
+        list(pool.map(work, range(nchunks)))
+
+    try:
+        size = os.path.getsize(part)
+    except OSError:
+        size = 0
+    if expect and abs(size - expect) > 1024:
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+        return False
+    os.replace(part, dest)
+    return True
 
 
 # ------------------------------------------------------------------ 工具
@@ -185,8 +309,14 @@ class SetupApp:
                         variable=self.opt_guard).pack(anchor="w")
         ttk.Checkbutton(box, text="下载手机端 APP（APK）到安装目录",
                         variable=self.opt_apk).pack(anchor="w")
-        ttk.Checkbutton(box, text="下载模型权重（Core 3B，约 2.0 GB）",
+        ttk.Checkbutton(box, text="下载模型权重（档位见下）",
                         variable=self.opt_model).pack(anchor="w")
+        mrow = ttk.Frame(box)
+        mrow.pack(anchor="w", pady=(4, 0))
+        ttk.Label(mrow, text="    权重档位：").pack(side="left")
+        self.model_choice = tk.StringVar(value=MODEL_ASSETS[0]["label"])
+        ttk.Combobox(mrow, textvariable=self.model_choice, state="readonly",
+                     width=56, values=[a["label"] for a in MODEL_ASSETS]).pack(side="left")
 
         self.hint = ttk.Label(self.container, text="", foreground="#a33")
         self.hint.pack(anchor="w")
@@ -320,16 +450,24 @@ class SetupApp:
     def _download_model(self, target: str) -> None:
         models_dir = os.path.join(target, "models")
         os.makedirs(models_dir, exist_ok=True)
-        for fname, _desc in MODEL_ASSETS:
-            dest = os.path.join(models_dir, fname)
-            if os.path.isfile(dest) and os.path.getsize(dest) > 100 * 1024 * 1024:
+        asset = _selected_asset(getattr(self, "model_choice", MODEL_ASSETS[0]["label"]))
+        dest = os.path.join(models_dir, asset["file"])
+        if os.path.isfile(dest) and os.path.getsize(dest) > 100 * 1024 * 1024:
+            return
+        label = asset["label"].split("（")[0]
+        for url in asset["urls"]:
+            # 大文件走并行分块（10.8GB：单连接 4.6 小时 → 并行约 4 分钟）
+            if asset["bytes"] >= 512 * 1024 * 1024:
+                ok = _http_get_parallel(url, dest, asset["bytes"], on_progress=lambda d, t: self._set(
+                    88 + int(8 * d / max(t, 1)),
+                    "下载 %s… %s / %s（并行加速）" % (label, _human(d), _human(t))))
+                if ok:
+                    return
                 continue
-            url = ("https://hf-mirror.com/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/"
-                   "qwen2.5-3b-instruct-q4_k_m.gguf")
-            if fname.startswith("Qwen2.5-3B"):
-                _http_get(url, dest, lambda d, t: self._set(
-                    88 + int(8 * d / max(t, 1)), "下载模型权重… %s / %s"
-                    % (_human(d), _human(t))))
+            _http_get(url, dest, lambda d, t: self._set(
+                88 + int(8 * d / max(t, 1)), "下载 %s… %s / %s" % (label, _human(d), _human(t))))
+            if os.path.isfile(dest) and os.path.getsize(dest) > 100 * 1024 * 1024:
+                return
 
     def _release_asset_url(self, suffix: str) -> str | None:
         try:

@@ -36,8 +36,8 @@ CATALOG: list[dict] = [
     {
         "id": "h1-turbo-q4",
         "tier": "h1",
-        "title": "Lumen H1 Turbo 权重 · H1-Turbo-Q4_K_M.gguf",
-        "file": "H1-Turbo-Q4_K_M.gguf",
+        "title": "gpt-oss-20b 权重 · gpt-oss-20b-Q4_K_M.gguf",
+        "file": "gpt-oss-20b-Q4_K_M.gguf",
         "bytes": 11624759488,
         "size_gb": 10.8,
         "license": "Apache-2.0",
@@ -182,7 +182,133 @@ def _human(n: float) -> str:
     return f"{n:.1f}GB"
 
 
+def _resolve_final_url(url: str) -> str:
+    """解析 302 拿到最终签名 URL —— 该 URL 才支持 HTTP Range。"""
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+
+    opener = urllib.request.build_opener(_NoRedirect(), urllib.request.ProxyHandler())
+    try:
+        with opener.open(urllib.request.Request(url, method="HEAD",
+                                               headers={"User-Agent": UA}), timeout=60) as r:
+            return r.geturl()
+    except urllib.error.HTTPError as e:
+        loc = e.headers.get("Location")
+        if loc:
+            return loc
+    except Exception:
+        pass
+    return url
+
+
+def _download_parallel(url: str, dest: str, expect: int, weight_id: str,
+                       threads: int = 16) -> None:
+    """多线程分块并行下载。
+
+    镜像单连接被限速在 ~0.7MB/s，10.8GB 要 4.6 小时；并行分块实测 4 分钟就能下完。
+    做法：解析最终签名 URL（支持 Range）→ 切块 → 各线程拉自己那段 →
+    直接 seek 写回同一个 .part 文件（区间互不重叠）。
+    """
+    part = dest + ".part"
+    final = _resolve_final_url(url)
+    total = expect or 0
+    if not total:
+        req = urllib.request.Request(final, headers={"Range": "bytes=0-0",
+                                                    "User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            cr = r.headers.get("Content-Range", "")
+            total = int(cr.rsplit("/", 1)[1]) if "/" in cr else int(r.headers.get("Content-Length") or 0)
+    if total <= 0:
+        raise IOError("无法确定文件大小")
+
+    chunk = 64 * 1024 * 1024
+    nchunks = (total + chunk - 1) // chunk
+    with open(part, "wb") as f:
+        f.truncate(total)
+
+    prog = {"got": 0}
+    plock = threading.Lock()
+    t0 = time.time()
+    last_report = [0.0]
+
+    def work(i: int) -> None:
+        start = i * chunk
+        end = min(start + chunk, total) - 1
+        got = 0
+        for attempt in range(5):
+            with _lock:
+                if _task["cancel"]:
+                    return
+            try:
+                req = urllib.request.Request(
+                    final, headers={"Range": f"bytes={start + got}-{end}",
+                                    "User-Agent": UA})
+                opener = urllib.request.build_opener(urllib.request.ProxyHandler())
+                with opener.open(req, timeout=120) as r:
+                    with open(part, "r+b") as f:
+                        f.seek(start + got)
+                        while True:
+                            b = r.read(1 << 20)
+                            if not b:
+                                break
+                            f.write(b)
+                            got += len(b)
+                            now = time.time()
+                            with plock:
+                                prog["got"] += len(b)
+                                g = prog["got"]
+                                if now - last_report[0] >= 1.0:
+                                    last_report[0] = now
+                                    speed = g / max(now - t0, 0.001)
+                                    eta = (total - g) / speed if speed > 0 else 0
+                                    _write_state({
+                                        "id": weight_id, "state": "downloading",
+                                        "received": g, "total": total, "speed": speed,
+                                        "eta": eta, "percent": (g / total * 100),
+                                        "file": os.path.basename(dest),
+                                        "text": f"{_human(g)} / {_human(total)} · "
+                                                f"{_human(speed)}/s · 并行 {threads} 线程",
+                                    })
+            except Exception:
+                time.sleep(2 + attempt * 2)
+                continue
+            return
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=threads) as pool:
+        for _ in pool.map(work, range(nchunks)):
+            pass
+
+    with _lock:
+        if _task["cancel"]:
+            _write_state({"id": weight_id, "state": "cancelled", "received": prog["got"],
+                          "total": total, "file": os.path.basename(dest)})
+            return
+    try:
+        size = os.path.getsize(part)
+    except OSError:
+        size = 0
+    if expect and abs(size - expect) > 1024:
+        raise IOError(f"文件大小异常：{size} != {expect}")
+    os.replace(part, dest)
+
+
 def _download(url: str, dest: str, expect: int, weight_id: str) -> None:
+    """大文件走并行分块（快得多），失败再回落到单连接续传。"""
+    if expect >= 512 * 1024 * 1024:
+        try:
+            _download_parallel(url, dest, expect, weight_id)
+            _write_state({"id": weight_id, "state": "done", "received": expect, "total": expect,
+                          "percent": 100, "file": os.path.basename(dest),
+                          "text": f"已下载 {_human(expect)}"})
+            return
+        except Exception as e:
+            config.log("weights.log", f"{weight_id} 并行下载失败，回落单连接：{e}")
+    _download_serial(url, dest, expect, weight_id)
+
+
+def _download_serial(url: str, dest: str, expect: int, weight_id: str) -> None:
     part = dest + ".part"
     have = 0
     if os.path.isfile(part):
