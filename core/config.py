@@ -124,7 +124,10 @@ DEFAULT_SETTINGS = {
     },
     "search": {
         "enabled": True,
-        "mode": "low_confidence",   # low_confidence | always
+        # always：每个问题都联网查证（用户明确要求「把握度高于 30% 也要联网，
+        # 结合网上权威答案再动手解决问题」）；low_confidence：仅在把握度低于
+        # threshold 时才检索。
+        "mode": "always",            # low_confidence | always
         "threshold": 60,
         "searxng_url": "",
         "max_results": 6,

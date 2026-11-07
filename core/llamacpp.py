@@ -341,6 +341,10 @@ def _spawn(model: str, port: int, ngl: int, ctx: int, fit: bool = True) -> subpr
         ngl_arg = "auto" if (cap.get("auto") and ngl > 0) else str(ngl)
         args += ["--fit", "on", "-ngl", ngl_arg]
         args += ["--fit-target", str(FIT_TARGET_MB)]
+        # ctx 必须显式给：--fit 默认会把它压到 4096，而「始终联网 + 知识库 +
+        # 系统提示」合起来要 4700+ token，会直接 400 exceed_context_size。
+        # KV cache 走 q8_0 内存，16384 约 400MB，共享机器也吃得下。
+        args += ["-c", str(int(ctx))]
         args += ["-ctk", "q8_0", "-ctv", "q8_0"]
     else:
         # 旧版无 --fit，或纯 CPU/RAM 兜底：显式固定层数与 ctx。
@@ -419,6 +423,28 @@ def _wait_for_ram(model_path: str, wait_s: float = 120.0) -> None:
              f"可能引起系统分页、影响同机其他程序。若对方在用电脑，建议先等其空闲。")
     else:
         _log(f"内存就绪（可用 {free:.1f}GB），开始加载 {size_gb:.1f}GB 权重")
+
+
+def server_n_ctx() -> int:
+    """服务端实际的上下文长度（读 /props），拿不到返回 0（表示未知）。"""
+    d = _http(f"http://{HOST}:{SERVER_PORT}/props", timeout=2.0)
+    if isinstance(d, dict):
+        for k in ("n_ctx", "context_size"):
+            v = d.get(k)
+            if isinstance(v, int) and v > 0:
+                return v
+        gs = d.get("default_generation_settings") or {}
+        if isinstance(gs, dict):
+            for k in ("n_ctx", "context_size"):
+                v = gs.get(k)
+                if isinstance(v, int) and v > 0:
+                    return v
+            params = gs.get("params") or {}
+            if isinstance(params, dict):
+                v = params.get("n_ctx")
+                if isinstance(v, int) and v > 0:
+                    return v
+    return 0
 
 
 def ensure(model: str | None = None, port: int = SERVER_PORT, ctx: int = 8192,
@@ -590,6 +616,7 @@ def _snapshot() -> dict:
         "backend": backend,
         "port": SERVER_PORT,
         "base_url": f"http://{HOST}:{SERVER_PORT}",
+        "n_ctx": server_n_ctx(),
         "models": [os.path.basename(p) for p in find_models()],
         "log": _state.get("log", "")[:1200],
     }

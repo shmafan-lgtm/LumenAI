@@ -104,8 +104,20 @@ def _searxng(q: str, base: str, limit: int) -> list[dict]:
     return out
 
 
+def _is_english_query(q: str) -> bool:
+    """查询主体是英文/数字时，cn.bing 会返回词典条目，必须走国际版。"""
+    s = (q or "").strip()
+    if not s:
+        return False
+    cjk = sum(1 for ch in s if "\u4e00" <= ch <= "\u9fff")
+    return cjk == 0 and len(re.findall(r"[A-Za-z]{2,}", s)) >= 2
+
+
 def _bing_rss(q: str, limit: int) -> list[dict]:
-    url = "https://cn.bing.com/search?" + urllib.parse.urlencode({"q": q, "format": "rss", "count": 20})
+    params = {"q": q, "format": "rss", "count": 20}
+    if _is_english_query(q):
+        params["ensearch"] = 1      # 英文查询 → 国际版结果，否则全是词典条目
+    url = "https://cn.bing.com/search?" + urllib.parse.urlencode(params)
     code, body = _get(url, timeout=9)
     if code != 200 or "<item>" not in body:
         return []
@@ -127,7 +139,8 @@ def _bing_rss(q: str, limit: int) -> list[dict]:
 
 
 def _bing_html(q: str, limit: int) -> list[dict]:
-    url = "https://cn.bing.com/search?" + urllib.parse.urlencode({"q": q, "ensearch": 0})
+    url = "https://cn.bing.com/search?" + urllib.parse.urlencode(
+        {"q": q, "ensearch": 1 if _is_english_query(q) else 0})
     code, body = _get(url, timeout=9)
     if code != 200:
         return []
@@ -290,13 +303,68 @@ def normalize_query(query: str) -> str:
     core = re.sub(r"[\s，。？！?!,.\"'「」《》()（）]", "", q)
     if core and core.lower() in _STOPWORD_ONLY:
         return ""
-    return q
+    return _strip_instruction_clauses(q)
+
+
+# 指令性从句：把整句丢给搜索引擎会把「百度一下」「近日与最近的区别」这种
+# 垃圾页当成结果。这里剥掉「用资料回答」「给出来源」这类对**助手**说的话，
+# 只留检索主体。剥完不足 4 个字就放弃（宁可不剥，也不要把主体也削没了）。
+_CLAUSE_NOISE = [
+    r"(请|麻烦|帮我|帮忙)?(你)?(用|根据|依据|按照)[^，。！？]{0,18}?(资料|检索结果|搜索结果|上文|网上)[^，。！？]{0,8}?(来)?(回答|作答|解答|回复|说明)",
+    r"(并|再|同时|另外)?(给|附|标注|列出|提供|附上|注明)[^，。！？]{0,12}?(来源|引用|出处|链接|网址|参考资料)",
+    r"^(请|麻烦)?(你)?(帮我|帮忙)?(回答|解答|说明一下|解释一下|介绍一下|分析一下|对比一下|总结一下)",
+    r"(谢谢|多谢|thanks?)[。.!！]*$",
+]
+
+
+def _strip_instruction_clauses(q: str) -> str:
+    out = q
+    for pat in _CLAUSE_NOISE:
+        out = re.sub(pat, " ", out, flags=re.IGNORECASE)
+    out = re.sub(r"\s+", " ", out).strip(" ，。！？?!,.、")
+    if len(re.sub(r"\s+", "", out)) < 4:
+        return q          # 剥过头了 → 用原句
+    return out or q
+
+
+_GENERIC_NOISE = (r"今天|今日|今天以内|最近|目前|最新|最新的|现在|当下|近期|"
+                   r"新的|新近|刚发布|新发布|新出的|有什么|有哪些|怎么样|如何|请问|请|帮我|帮忙|"
+                   r"最新的消息|消息|资讯")
+
+
+def _query_variants(q: str) -> list[str]:
+    """生成 1~3 个检索变体：去时间词版 → 原句 → 去疑问后缀版。
+
+    去噪版排第一：搜索引擎把「今天/最近/最新」当关键词会返回「今日头条」
+    这类噪声首页，先查更贴题的版本、再用原句补量。
+    """
+    stripped = re.sub(_GENERIC_NOISE, " ", q)
+    stripped = re.sub(r"\s+", " ", stripped).strip(" ，。！？?!,.、")
+    out = []
+    if len(re.sub(r"\s+", "", stripped)) >= 2 and stripped != q:
+        out.append(stripped)
+    out.append(q)
+    m = re.match(r"^(.*?)(是什么|是啥|有哪些|有吗|怎么样|如何|吗|呢|？|\?)$", q.strip())
+    if m and len(re.sub(r"\s+", "", m.group(1))) >= 2:
+        out.append(m.group(1).strip())
+    # 去重保序
+    seen = set()
+    uniq = []
+    for v in out:
+        if v and v not in seen:
+            seen.add(v)
+            uniq.append(v)
+    return uniq[:3]
 
 
 def search(query: str, limit: int | None = None, use_cache: bool = True) -> dict:
     st = config.settings().get("search") or {}
     limit = int(limit or st.get("max_results", 6))
     ttl = float(st.get("cache_hours", 24)) * 3600
+    if st.get("mode") == "always":
+        # 始终联网模式的目的是「查最新」，24 小时缓存与这个目的相悖，
+        # 压到 1 小时（同一问题短时间内不重复打网络）。
+        ttl = min(ttl, 3600.0)
 
     query = normalize_query(query)
     if not query:
@@ -323,26 +391,49 @@ def search(query: str, limit: int | None = None, use_cache: bool = True) -> dict
     providers: list[tuple[str, callable]] = []
     if st.get("searxng_url"):
         providers.append(("searxng", lambda q, n: _searxng(q, st["searxng_url"], n)))
-    providers += [
-        ("bing", _bing_rss),
-        ("bing-html", _bing_html),
-        ("baidu", _baidu),
-        ("sogou", _sogou),
-        ("duckduckgo", _duck),
-    ]
+    if _is_english_query(query):
+        # 英文/国际查询：DuckDuckGo 的国际结果比 cn.bing 准得多
+        # （cn.bing 对英文长句常只取首词，返回词典条目）。
+        providers += [
+            ("duckduckgo", _duck),
+            ("bing", _bing_rss),
+            ("bing-html", _bing_html),
+            ("sogou", _sogou),
+            ("baidu", _baidu),
+        ]
+    else:
+        providers += [
+            ("bing", _bing_rss),
+            ("bing-html", _bing_html),
+            ("baidu", _baidu),
+            ("sogou", _sogou),
+            ("duckduckgo", _duck),
+        ]
 
     results: list[dict] = []
     used = []
-    for name, fn in providers:
+    # 变体查询：中文搜索引擎会把「今天/最近/最新」当成关键词，于是返回
+    # 「今日头条」「百度一下」这类噪声首页。去掉时间词与疑问后缀再查一遍，
+    # **每个变体公平分配名额**（否则第一路的噪声会占满 limit，好的变体没机会）。
+    variants = _query_variants(query)
+    per = max(2, (limit + len(variants) - 1) // len(variants))
+    for vq in variants:
         if len(results) >= limit:
             break
-        try:
-            got = fn(query, limit)
-        except Exception:
-            got = []
-        if got:
-            used.append(name)
-            results = _dedupe(list(results) + got, limit + 4)
+        got_all: list[dict] = []
+        for name, fn in providers:
+            if len(got_all) >= per:
+                break
+            try:
+                got = fn(vq, per)
+            except Exception:
+                got = []
+            if got:
+                if name not in used:
+                    used.append(name)
+                got_all = _dedupe(list(got_all) + got, per)
+        if got_all:
+            results = _dedupe(list(results) + got_all, limit + 4)
 
     results = results[:limit]
     took = int((time.time() - t0) * 1000)
@@ -381,17 +472,27 @@ def fetch_page(url: str, max_chars: int = 1800, timeout: float = 7.0) -> str:
     return txt[:max_chars]
 
 
-def build_context(results: list[dict], deep: bool = False, deep_n: int = 2) -> str:
-    """把结果压成给模型的 RAG 上下文，带编号引用。"""
+def build_context(results: list[dict], deep: bool = False, deep_n: int = 2,
+                  max_chars: int = 2600) -> str:
+    """把结果压成给模型的 RAG 上下文，带编号引用。
+
+    有总字符预算：始终联网模式下，这段资料会和系统提示、知识库片段一起进
+    prompt，失控就会撞上下文上限（实测 4742 token > 4096 直接 400）。
+    """
     lines = []
+    used = 0
     for i, r in enumerate(results, 1):
         snippet = (r.get("snippet") or "").strip()
         if deep and i <= deep_n and len(snippet) < 400:
             extra = fetch_page(r.get("url", ""))
             if extra:
                 snippet = (snippet + "\n" + extra).strip()
-        snippet = re.sub(r"\s+", " ", snippet)[:900]
-        lines.append(f"[{i}] {r.get('title','')}\nURL: {r.get('url','')}\n摘要: {snippet}")
+        snippet = re.sub(r"\s+", " ", snippet)[:600]
+        line = f"[{i}] {r.get('title','')}\nURL: {r.get('url','')}\n摘要: {snippet}"
+        if used + len(line) > max_chars and lines:
+            break                      # 预算用完，剩下的不塞了（别让 prompt 爆掉）
+        lines.append(line)
+        used += len(line)
     return "\n\n".join(lines)
 
 

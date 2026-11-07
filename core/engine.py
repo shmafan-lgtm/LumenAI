@@ -339,7 +339,12 @@ def _stream_openai(base: str, model: str, messages: list[dict], temperature: flo
         "max_tokens": int(max_tokens),
     }
     if num_ctx:
-        payload["num_ctx"] = int(num_ctx)
+        want = int(num_ctx)
+        srv = llamacpp.server_n_ctx() if llamacpp.SERVER_PORT else 0
+        if srv and want > srv:
+            want = srv          # 别请求超过服务端窗口的上下文
+        if want > 0:
+            payload["num_ctx"] = want
     if reasoning_effort:
         payload["reasoning_effort"] = str(reasoning_effort)
 

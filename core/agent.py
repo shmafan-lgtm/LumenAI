@@ -10,7 +10,7 @@ import time
 import uuid
 from typing import Callable, Iterator
 
-from . import config, engine, knowledge, models, prompt, remote, search, store
+from . import config, engine, knowledge, llamacpp, models, prompt, remote, search, store
 
 TOOL_RE = re.compile(r'(?s)<tool\s+name="([a-zA-Z_]+)"\s*>(.*?)</tool>')
 # 小模型常见的几种「非标准」工具写法，解析层统一兜住
@@ -1037,6 +1037,11 @@ class Runner:
         convo.append({"role": "user", "content": user_text})
         # 自动吸收到的全网新知（后台持续更新），稍后并入用户消息用于 RAG
         kb_ctx = knowledge.relevant(user_text)
+        # 用户问过什么 → 并入自适应主题队列，知识库会越用越贴近你的关注点
+        try:
+            knowledge.note_query(user_text)
+        except Exception:
+            pass
 
         sources: list[dict] = []
         searched = False
@@ -1049,6 +1054,23 @@ class Runner:
         used_names: set[str] = set()  # 本任务已用过的不同工具名（全局上限 4 个）
 
         self.emit({"type": "meta", "engine": eng_status, "tier": tier["id"], "agent": agent_ok})
+
+        # 模型被「闲置自动释放」关掉后，先把它拉回来再决定走哪条路。
+        # 否则这里会直接落到离线规则引擎——用户拿到的是「这不是模型输出」的
+        # 摘要，看起来就像降智。拉起约十几秒，期间给用户明确提示。
+        if eng_status.get("fallback"):
+            _want, _wn = models.resolve_weight(tier["id"])
+            if _want and llamacpp.available():
+                self.emit({"type": "status",
+                           "text": "本地模型已释放内存，正在重新加载（约十几秒）…"})
+                try:
+                    llamacpp.ensure(model=_want,
+                                    ctx=int((st.get("engine") or {}).get("num_ctx") or 8192))
+                except Exception as e:  # noqa: BLE001
+                    config.log("error.log", f"agent reload model: {e}")
+                eng_status = engine.status()
+                self.emit({"type": "meta", "engine": eng_status,
+                           "tier": tier["id"], "agent": agent_ok})
 
         # 离线：规则引擎直接给结果，尽量把搜索价值体现出来
         if eng_status.get("fallback"):
@@ -1074,13 +1096,17 @@ class Runner:
                               {"engine": "offline", "sources": sources})
             return
 
-        # 预检索：问题明显需要时效性资料时，先把资料放到首轮上下文里，
-        # 小模型（3B 级）很难自己触发检索，先喂资料比让它「知道自己不知道」可靠得多。
+        # 预检索：始终联网模式下，每个问题都先联网查证，把资料喂进首轮上下文。
+        # 这样模型是「看着网上的权威答案 → 动手解决问题」，而不是先凭记忆答一遍
+        # 再补检索（后者既慢又可能把没核实的结论先说出去）。
+        # 例外：问 Lumen 自己是谁、以及本机文件任务——这两类不该拿互联网资料代替。
         pre_ctx: list[dict] = []
         if (search_on and not is_identity_question(user_text)
                 and not is_workspace_task(user_text)
-                and heuristic_search(user_text, "")):
-            self.emit({"type": "status", "text": "问题涉及最新信息，正在联网检索…"})
+                and (always_search or heuristic_search(user_text, ""))):
+            self.emit({"type": "status",
+                       "text": "正在联网查证最新资料…" if always_search
+                       else "问题涉及最新信息，正在联网检索…"})
             try:
                 r0 = search.search(user_text, limit=int(se.get("max_results", 6)))
                 if r0["results"]:

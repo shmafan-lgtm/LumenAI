@@ -13,16 +13,19 @@
   },
   "search": {
     "enabled": true,
-    "mode": "low_confidence",
+    "mode": "always",
     "threshold": 60,
     "searxng_url": "",
     "max_results": 6,
     "cache_hours": 24,
-    "_说明": "mode=low_confidence 表示只在模型自评置信度低于 threshold、或问题明显涉及时效性信息时才联网。"
+    "_说明": "mode=always：每个问题都联网查证——即便模型把握度很高，也先用网上的权威答案核实，再据此动手解决问题。low_confidence 则只在把握度低于 threshold 时才联网。"
   },
   "agent": {
     "enabled": true,
     "max_steps": 6,
+    "permission_mode": "open",
+    "max_tools": 4,
+    "tools": [],
     "require_approval": true,
     "allow_shell": true,
     "_说明": "require_approval=true 时，写文件与执行命令都会弹窗等你点头。"
