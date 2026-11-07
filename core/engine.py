@@ -319,12 +319,17 @@ def stream_chat(messages: list[dict], **kw) -> Iterator[dict]:
 def _stream_openai(base: str, model: str, messages: list[dict], temperature: float = 0.6,
                    max_tokens: int = 2048, num_ctx: int | None = None,
                    timeout: float = 180, api_key: str | None = None,
-                   reasoning_effort: str | None = None) -> Iterator[dict]:
+                   reasoning_effort: str | None = None,
+                   _attempt: int = 0) -> Iterator[dict]:
     """标准 OpenAI 兼容 SSE 流式对话。
 
     reasoning_effort：reasoning 模型（gpt-oss / R1 系）的思考力度。
     不传的话端端点会用默认档（对 gpt-oss 通常是 high），实测一个普通任务能烧
     2 万字思考、跑 130 秒，用户看到的是长时间"转圈"。按档位显式指定更合适。
+
+    空回复兜底：gpt-oss 可能把 max_tokens 全花在 reasoning 上，最终 content
+    为空——用户看到的就是「转了半天什么都没出」（实测带系统提示时 2/60 命中）。
+    这里检测到「有思考、没正文」就自动加倍 token 重试一次。
     """
     payload = {
         "model": model,
@@ -367,8 +372,11 @@ def _stream_openai(base: str, model: str, messages: list[dict], temperature: flo
         return
 
     buf = b""
+    n_content = 0
+    n_reason = 0
+    done = False
     try:
-        while True:
+        while not done:
             chunk = resp.read(1024)
             if not chunk:
                 break
@@ -382,8 +390,8 @@ def _stream_openai(base: str, model: str, messages: list[dict], temperature: flo
                 if obj is None:
                     continue
                 if obj.get("done"):
-                    yield {"type": "done"}
-                    return
+                    done = True
+                    break
                 try:
                     delta = obj["choices"][0].get("delta") or {}
                     text = delta.get("content")
@@ -395,8 +403,10 @@ def _stream_openai(base: str, model: str, messages: list[dict], temperature: flo
                     text = None
                     reason = None
                 if reason:
+                    n_reason += 1
                     yield {"type": "reasoning", "text": reason}
                 if text:
+                    n_content += 1
                     yield {"type": "token", "text": text}
     except Exception as e:
         yield {"type": "err", "message": f"流中断：{e}"}
@@ -406,6 +416,15 @@ def _stream_openai(base: str, model: str, messages: list[dict], temperature: flo
             resp.close()
         except Exception:
             pass
+
+    # 空回复兜底：思考把 token 用光了 → 加倍重试一次（第一次没吐出正文，重试不会重复内容）
+    if n_content == 0 and n_reason > 0 and _attempt == 0:
+        yield {"type": "meta_local",
+               "label": f"模型思考超出预算，正在加长重试（{max_tokens} → {max_tokens * 2} tokens）…"}
+        yield from _stream_openai(base, model, messages, temperature, max_tokens * 2,
+                                  num_ctx, timeout, api_key, reasoning_effort, _attempt=1)
+        return
+
     yield {"type": "done"}
 
 

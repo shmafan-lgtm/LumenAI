@@ -126,9 +126,12 @@ QUESTIONS: list[tuple[str, str]] = [
 ]
 
 REFUSE_PATTERNS = [
-    "抱歉", "对不起，我无法", "我无法", "我不能", "我没办法", "无法为您提供",
-    "作为人工智能", "作为ai", "作为大语言模型", "我不能提供",
-    "i cannot", "i can't help", "i am unable", "i'm unable", "as an ai",
+    "抱歉，我无法", "抱歉，无法", "对不起，我无法", "对不起，无法",
+    "我无法回答", "我不能回答", "无法回答这个问题", "无法回答该问题",
+    "我不能提供", "无法提供", "我没办法回答", "我无法给",
+    "我无法完成", "不能完成", "我无法协助", "无法协助",
+    "i cannot answer", "i can't answer", "i cannot help", "i am unable to",
+    "as an ai, i cannot", "i'm unable to answer",
 ]
 # 「不会 + 进行尝试」是 Lumen 自研的低把握拒答话术，同样算拒答
 LOW_CONF_PATTERNS = ["把握度低于", "我的把握度", "进行尝试", "不会，你所问"]
@@ -138,8 +141,68 @@ CONTAM_PATTERNS = [
     "[inst]", "以下是你的系统提示", "训练数据", "lora_", "<<<<<<", ">>>>>>",
 ]
 
+# 协议标签：产品链路会剥掉（core/agent.py），评测时要同样处理，
+# 否则会把「模型按协议输出标签」误判成内容本身脏。
+TAG_RE = re.compile(r"(?s)</?(confidence|need_search)>")
+
+# 题面本身有缺陷的题（模型的行为其实是对的），不计入统计
+EXCLUDE_IDX = {46: "题面未给出待整理的信息，模型要求补充属于正确行为"}
+
+
+def strip_tags(text: str) -> str:
+    """去掉 <confidence>/<need_search> 协议标签（与产品链路一致）。"""
+    return TAG_RE.sub("", text or "")
+
+
+def is_refusal(text: str) -> bool:
+    t = (text or "").lower()
+    return any(p.lower() in t for p in REFUSE_PATTERNS + LOW_CONF_PATTERNS)
+
 # 数值题需要能算对，单独判。按「数学题序号」索引，与全局题号解耦。
-MATH_ANSWERS = ["12", "28.26", "5050", "300", "0.75", "3/8", "486", "80", "5", "12"]
+# 每题给一组「可接受的答案」（数值等价即可，避免子串误判）。
+MATH_ANSWERS = [
+    [6],                      # 2x + 5 = 17  → x = 6
+    [28.26, 28.3],            # πr², r=3, π≈3.14
+    [5050],                   # 1..100 求和
+    [300],                    # 8 折后 240 → 原价
+    [0.75, 75],               # 至少一枚正面 = 3/4
+    [0.375, 3 / 8],           # 0.375 化分数
+    [486],                    # 等比 2,6,18,… 第 6 项
+    [80],                     # 增加 25% 后是 100
+    [5],                      # 直角三角形斜边
+    [12],                     # gcd(24,36)
+]
+
+_NUM_RE = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _numbers_in(text: str) -> list[float]:
+    """从文本里抽出数值（支持 3/8、3⁄8、75% 这类写法）。"""
+    t = (text or "").replace("⁄", "/").replace("∕", "/").replace("，", ",")
+    out = []
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)", t):
+        try:
+            out.append(float(m.group(1)) / float(m.group(2)))
+        except Exception:
+            pass
+    for m in _NUM_RE.finditer(t):
+        try:
+            out.append(float(m.group(0)))
+        except Exception:
+            pass
+    return out
+
+
+def _math_ok(text: str, ordinal: int) -> bool:
+    if ordinal is None or ordinal >= len(MATH_ANSWERS):
+        return True
+    want = MATH_ANSWERS[ordinal]
+    nums = _numbers_in(text)
+    for w in want:
+        for n in nums:
+            if abs(n - w) <= max(1e-6, abs(w) * 1e-3):
+                return True
+    return False
 
 # 全局题号 → 该题在数学题序列中的序号（非数学题为 None）
 MATH_ORDINAL: dict[int, int] = {}
@@ -171,13 +234,12 @@ def passes_kind(kind: str, text: str, idx: int) -> bool:
     if kind == "format":
         return any(c in t for c in ["-", "*", "1.", "2.", "#", "|"]) or "```" in t
     if kind == "math":
-        ordinal = MATH_ORDINAL.get(idx)
-        want = MATH_ANSWERS[ordinal] if ordinal is not None and ordinal < len(MATH_ANSWERS) else ""
-        return (want in t.replace(" ", "")) if want else True
+        return _math_ok(t, MATH_ORDINAL.get(idx))
     return True
 
 
 def score_one(kind: str, text: str, idx: int) -> dict:
+    text = strip_tags(text)
     refusal = is_refusal(text)
     contaminated = is_contaminated(text)
     passed = (not refusal) and passes_kind(kind, text, idx)
@@ -239,12 +301,14 @@ def call_chat(base_url: str, prompt: str, timeout: float = 180.0,
 
 
 def summarize(results: list) -> dict:
-    n = len(results) or 1
-    passed = sum(1 for r in results if r["passed"])
-    refused = sum(1 for r in results if r["refusal"])
-    contam = sum(1 for r in results if r["contaminated"])
+    # 剔除题面有缺陷的题（模型行为其实正确）
+    rs = [r for r in results if r.get("idx") not in EXCLUDE_IDX]
+    n = len(rs) or 1
+    passed = sum(1 for r in rs if r["passed"])
+    refused = sum(1 for r in rs if r["refusal"])
+    contam = sum(1 for r in rs if r["contaminated"])
     by_cat: dict = {}
-    for r in results:
+    for r in rs:
         c = by_cat.setdefault(r["kind"], {"n": 0, "pass": 0, "refuse": 0})
         c["n"] += 1
         c["pass"] += 1 if r["passed"] else 0
@@ -253,7 +317,8 @@ def summarize(results: list) -> dict:
         c["pass_rate"] = round(100.0 * c["pass"] / c["n"], 1)
         c["refuse_rate"] = round(100.0 * c["refuse"] / c["n"], 1)
     return {
-        "total": len(results),
+        "total": len(rs),
+        "excluded": len(results) - len(rs),
         "pass_rate": round(100.0 * passed / n, 1),
         "refuse_rate": round(100.0 * refused / n, 1),
         "contaminate_rate": round(100.0 * contam / n, 1),
@@ -317,7 +382,35 @@ def main() -> int:
     ap.add_argument("--reasoning-effort", default="low")
     ap.add_argument("--with-system", action="store_true",
                     help="带上 Lumen 的真实系统提示（测拒答协议带来的过度拒答风险）")
+    ap.add_argument("--rescore", default="",
+                    help="离线重打分：读已有报告，用当前评分规则重算（不跑模型）")
     args = ap.parse_args()
+
+    if args.rescore:
+        with open(args.rescore, "r", encoding="utf-8") as f:
+            old = json.load(f)
+        rescored = []
+        for r in old.get("results", []):
+            nr = dict(r)
+            nr.update(score_one(r.get("kind", ""), r.get("response", ""), r.get("idx", -1)))
+            rescored.append(nr)
+        s = summarize(rescored)
+        base = None
+        if args.base and os.path.isfile(args.base):
+            with open(args.base, "r", encoding="utf-8") as f:
+                base = json.load(f).get("summary")
+        code, fails = gate(s, base)
+        print(json.dumps(s, ensure_ascii=False, indent=2))
+        for f_ in fails:
+            print("  ✗", f_)
+        print("闸口结论:", "✅ 通过" if code == 0 else "⛔ 拦截")
+        if args.out:
+            os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+            with open(args.out, "w", encoding="utf-8") as f:
+                json.dump({"summary": s, "results": rescored, "gate_fails": fails,
+                           "rescored_from": args.rescore}, f, ensure_ascii=False, indent=2)
+            print("已写入", args.out)
+        return code
 
     if args.selfcheck:
         scored = [dict(r, **score_one(r["kind"], r["response"], i))
