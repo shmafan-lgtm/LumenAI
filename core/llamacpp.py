@@ -46,6 +46,98 @@ LOG_PATH = os.path.join(config.LOG_DIR, "llamacpp.log")
 # 否则界面上只能显示笼统的「本地引擎在线」，看不出到底跑在 Vulkan 还是 CPU。
 STATE_PATH = os.path.join(config.DATA_DIR, "llamacpp.json")
 
+# --fit 的显存预留余量(MB)。llama.cpp 默认留 1024MB，太保守：
+# 权重比显存大时，剩下的部分全落内存，会把本机其他程序挤出去。
+# 这台机器是共享的（别人可能在用），所以尽量多压进显存、少占内存。
+FIT_TARGET_MB = 256
+
+# 启动大模型前要求的最小空闲内存(GB)。低于此值说明别人正在用机器，
+# 此时强行加载会把系统拖到分页，反而谁都跑不动 —— 先等，别硬抢。
+MIN_FREE_RAM_GB = 3.5
+BIG_MODEL_GB = 6.0
+
+# 闲置自动卸载：20B 权重常驻会占 8-9GB 内存。这台机器是共享的（别人可能在
+# 打游戏），模型不该在没人用的时候霸占内存。超过该分钟数没有请求就自己释放，
+# 下次对话时 ensure() 自动重新拉起（约 17s）。设 0 关闭。
+# 只回收我们自己拉起的进程，绝不结束任何其他程序。
+IDLE_MINUTES = float(os.environ.get("LUMEN_MODEL_IDLE_MINUTES", "10") or 0)
+
+_activity = {"ts": time.time()}
+
+
+def note_activity() -> None:
+    """标记模型刚被用过（由推理层在每次请求时调用）。"""
+    _activity["ts"] = time.time()
+
+
+def idle_minutes() -> float:
+    return (time.time() - _activity["ts"]) / 60.0
+
+
+def _idle_watchdog(proc) -> None:
+    """闲置看门狗：超过 IDLE_MINUTES 没有请求就释放模型占用的显存与内存。
+
+    只针对 Lumen 自己 spawn 的这个 llama-server 子进程；
+    绝不结束同机其他人的任何程序。
+    """
+    while True:
+        time.sleep(20)
+        try:
+            if proc.poll() is not None:
+                return
+        except Exception:
+            return
+        if IDLE_MINUTES <= 0:
+            continue
+        idle = idle_minutes()
+        if idle < IDLE_MINUTES:
+            continue
+        _log(f"模型已闲置 {idle:.0f} 分钟，自动释放显存/内存（不影响同机其他程序）")
+        try:
+            proc.terminate()
+            try:
+                proc.wait(timeout=8)
+            except Exception:
+                proc.kill()
+        except Exception:
+            pass
+        with _lock:
+            if _state.get("proc") is proc:
+                _state["proc"] = None
+                _state["own"] = False
+                _state["model"] = ""
+                _state["backend"] = ""
+            try:
+                os.remove(STATE_PATH)
+            except Exception:
+                pass
+        return
+
+
+
+def free_ram_gb() -> float:
+    """当前可用物理内存(GB)。取不到就返回 -1（表示未知，不阻塞）。"""
+    try:
+        import ctypes
+
+        class MEMORYSTATUSEX(ctypes.Structure):
+            _fields_ = [
+                ("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+            ]
+
+        st = MEMORYSTATUSEX()
+        st.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st)):
+            return st.ullAvailPhys / (1024 ** 3)
+    except Exception:
+        pass
+    return -1.0
+
+
 
 def _write_state(model: str, backend: str, port: int, pid: int) -> None:
     try:
@@ -180,12 +272,16 @@ def _spawn(model: str, port: int, ngl: int, ctx: int, fit: bool = True) -> subpr
         "--host", HOST,
         "--port", str(port),
         "--no-warmup",
+        # 单槽即可（单机单用户），KV cache 占用最小 → 内存占用最低
+        "--parallel", "1",
     ]
     if cap.get("fit") and fit:
         # --fit on：按显存/内存自动折算 GPU 层数（未传 -c 时也会自动定 ctx 上限）。
-        # 4GB 显存 + 12.8GB 权重 → 一部分层进 VRAM，其余 mmap 进系统内存(RAM)，KV 也走 RAM。
+        # 权重比显存大时，一部分层进 VRAM、其余 mmap 进系统内存(RAM)，KV 也走 RAM。
+        # --fit-target 收紧显存余量 → 尽量多留显存、少占内存（共享机器上很重要）。
         ngl_arg = "auto" if (cap.get("auto") and ngl > 0) else str(ngl)
         args += ["--fit", "on", "-ngl", ngl_arg]
+        args += ["--fit-target", str(FIT_TARGET_MB)]
         args += ["-ctk", "q8_0", "-ctv", "q8_0"]
     else:
         # 旧版无 --fit，或纯 CPU/RAM 兜底：显式固定层数与 ctx。
@@ -218,6 +314,38 @@ def _wait_ready(port: int, timeout: float = 90.0, proc: subprocess.Popen | None 
     return False
 
 
+def _wait_for_ram(model_path: str, wait_s: float = 120.0) -> None:
+    """启动大模型前先确认内存够用，不够就等一等。
+
+    这台机器是共享的：别人可能在跑游戏/别的程序。此时硬加载 10GB 级权重
+    会把系统拖进分页，结果是模型慢、别人也卡。先等内存释放，必要时给
+    出明确告警，但绝不主动结束别人的进程。
+    """
+    try:
+        size_gb = os.path.getsize(model_path) / (1024 ** 3)
+    except OSError:
+        return
+    if size_gb <= BIG_MODEL_GB:
+        return
+    free = free_ram_gb()
+    if free < 0:
+        return                      # 取不到内存信息，不阻塞
+    t0 = time.time()
+    warned = False
+    while free < MIN_FREE_RAM_GB and time.time() - t0 < wait_s:
+        if not warned:
+            _log(f"内存不足（可用 {free:.1f}GB < 需要 {MIN_FREE_RAM_GB}GB），"
+                 f"等待其他程序释放内存，最多等 {int(wait_s)}s（不会结束任何他人进程）")
+            warned = True
+        time.sleep(5)
+        free = free_ram_gb()
+    if free < MIN_FREE_RAM_GB:
+        _log(f"⚠ 内存仍只有 {free:.1f}GB，仍要加载 {size_gb:.1f}GB 权重；"
+             f"可能引起系统分页、影响同机其他程序。若对方在用电脑，建议先等其空闲。")
+    else:
+        _log(f"内存就绪（可用 {free:.1f}GB），开始加载 {size_gb:.1f}GB 权重")
+
+
 def ensure(model: str | None = None, port: int = SERVER_PORT, ctx: int = 8192,
            ngl: int = 99) -> dict:
     """确保本地 llama-server 在跑。返回状态字典。
@@ -247,6 +375,7 @@ def ensure(model: str | None = None, port: int = SERVER_PORT, ctx: int = 8192,
 
         cap = _capabilities()
         for mp in cands:
+            _wait_for_ram(mp)
             if cap.get("fit"):
                 # 自动卸载路径：--fit on -ngl auto 按显存/内存分配层数与 ctx。
                 # 这是 4GB 显存跑 20B 的主路径——部分层进 VRAM，其余进系统内存(RAM)。
@@ -273,6 +402,9 @@ def ensure(model: str | None = None, port: int = SERVER_PORT, ctx: int = 8192,
                     _write_state(mp, mode, port, p.pid)
                     if _wait_ready(port, wait_s, p):
                         _log(f"已启动 llama-server（{mode}）：{os.path.basename(mp)}")
+                        note_activity()
+                        threading.Thread(target=_idle_watchdog, args=(p,),
+                                         daemon=True).start()
                         return _snapshot()
                     # 没起来就杀掉换下一种组合
                     try:
@@ -314,6 +446,9 @@ def ensure(model: str | None = None, port: int = SERVER_PORT, ctx: int = 8192,
                 _write_state(mp, backend, port, p.pid)
                 if _wait_ready(port, wait_s, p):
                     _log(f"已启动 llama-server（{backend}）：{os.path.basename(mp)}")
+                    note_activity()
+                    threading.Thread(target=_idle_watchdog, args=(p,),
+                                     daemon=True).start()
                     return _snapshot()
                 try:
                     p.kill()

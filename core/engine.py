@@ -252,6 +252,32 @@ def stream_chat(messages: list[dict], **kw) -> Iterator[dict]:
                 reasoning_effort=kw.get("reasoning_effort"),
             )
             return
+        # 运行时存在但服务被「闲置自动释放」关掉了 → 自动重新拉起（约 17s），
+        # 别让用户对着报错发呆。只重启 Lumen 自己管理的 llama-server。
+        if llamacpp.available():
+            want, _wn = models.resolve_weight(st.get("tier", "h1"))
+            if want:
+                ctx = int((st.get("engine") or {}).get("num_ctx") or 8192)
+                yield {"type": "meta_local",
+                       "label": "模型刚才已自动释放内存，正在重新加载（约十几秒）…"}
+                try:
+                    llamacpp.ensure(model=want, ctx=ctx)
+                except Exception as e:  # noqa: BLE001
+                    yield {"type": "err", "message": f"本地模型启动失败：{e}"}
+                    return
+                lc = llamacpp.status()
+                if lc.get("running"):
+                    yield from _stream_openai(
+                        lc["base_url"],
+                        kw.get("model") or "local",
+                        messages,
+                        temperature=kw.get("temperature", 0.6),
+                        max_tokens=kw.get("max_tokens", 2048),
+                        num_ctx=(st.get("engine") or {}).get("num_ctx"),
+                        timeout=(st.get("engine") or {}).get("timeout", 180),
+                        reasoning_effort=kw.get("reasoning_effort"),
+                    )
+                    return
         # 再退到内置 ONNX 后端
         if onnx_engine.available():
             info = onnx_engine.info()
@@ -324,6 +350,8 @@ def _stream_openai(base: str, model: str, messages: list[dict], temperature: flo
         headers=headers,
         method="POST",
     )
+    # 标记模型刚被使用：闲置看门狗据此判断何时释放显存/内存
+    llamacpp.note_activity()
     try:
         resp = urllib.request.urlopen(req, timeout=float(timeout))
     except urllib.error.HTTPError as e:
