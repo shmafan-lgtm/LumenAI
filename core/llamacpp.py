@@ -172,24 +172,24 @@ def _capabilities() -> dict:
     return _cap_cache
 
 
-def _spawn(model: str, port: int, ngl: int, ctx: int) -> subprocess.Popen:
+def _spawn(model: str, port: int, ngl: int, ctx: int, fit: bool = True) -> subprocess.Popen:
     cap = _capabilities()
     args = [
         SERVER_EXE,
         "-m", model,
         "--host", HOST,
         "--port", str(port),
-        "-c", str(ctx),
         "--no-warmup",
     ]
-    if cap.get("fit"):
-        # 让 llama.cpp 按显存自己算能装多少层、ctx 压到多少
-        args += ["--fit", "on"]
-        args += ["-ngl", "auto" if cap.get("auto") else str(ngl)]
-        # 显存吃紧时 KV cache 走 q8_0，省一半
+    if cap.get("fit") and fit:
+        # --fit on：按显存/内存自动折算 GPU 层数（未传 -c 时也会自动定 ctx 上限）。
+        # 4GB 显存 + 12.8GB 权重 → 一部分层进 VRAM，其余 mmap 进系统内存(RAM)，KV 也走 RAM。
+        ngl_arg = "auto" if (cap.get("auto") and ngl > 0) else str(ngl)
+        args += ["--fit", "on", "-ngl", ngl_arg]
         args += ["-ctk", "q8_0", "-ctv", "q8_0"]
     else:
-        args += ["-ngl", str(ngl)]
+        # 旧版无 --fit，或纯 CPU/RAM 兜底：显式固定层数与 ctx。
+        args += ["-ngl", str(ngl), "-c", str(ctx)]
     env = dict(os.environ)
     env["GGML_VK_VISIBLE_DEVICES"] = env.get("GGML_VK_VISIBLE_DEVICES", "0")
     si = subprocess.STARTUPINFO()
@@ -245,10 +245,53 @@ def ensure(model: str | None = None, port: int = SERVER_PORT, ctx: int = 8192,
             _log("models/ 下没有 .gguf 模型文件")
             return _snapshot()
 
+        cap = _capabilities()
         for mp in cands:
-            # 回退链：显存不够就逐级减少卸载层数，最后退到 CPU。
-            # 8GB 卡跑 11GB 级 MoE 权重时，全量卸载必然失败，
-            # 没有这条链就会直接落到「起不来」。
+            if cap.get("fit"):
+                # 自动卸载路径：--fit on -ngl auto 按显存/内存分配层数与 ctx。
+                # 这是 4GB 显存跑 20B 的主路径——部分层进 VRAM，其余进系统内存(RAM)。
+                # 第一次自动分配；若冷启失败，再退化成纯 CPU/RAM（-ngl 0 -c 4096）兜底。
+                fit_attempts = [
+                    ("vulkan+ram", 110.0),
+                    ("cpu-ram", 70.0),
+                ]
+                for mode, wait_s in fit_attempts:
+                    try:
+                        if mode == "cpu-ram":
+                            # 纯内存(RAM)运行：不卸载任何层到显存，ctx 压到 4K 防撑爆内存
+                            p = _spawn(mp, port, 0, 4096, fit=False)
+                        else:
+                            p = _spawn(mp, port, ngl, ctx, fit=True)
+                    except Exception as e:
+                        _log(f"拉起失败：{e}")
+                        continue
+                    _state["proc"] = p
+                    _state["own"] = True
+                    _state["model"] = mp
+                    _state["backend"] = mode
+                    _state["started_at"] = time.time()
+                    _write_state(mp, mode, port, p.pid)
+                    if _wait_ready(port, wait_s, p):
+                        _log(f"已启动 llama-server（{mode}）：{os.path.basename(mp)}")
+                        return _snapshot()
+                    # 没起来就杀掉换下一种组合
+                    try:
+                        p.kill()
+                    except Exception:
+                        pass
+                    _state["proc"] = None
+                    _state["own"] = False
+                    _state["model"] = ""
+                    _state["backend"] = ""
+                    try:
+                        os.remove(STATE_PATH)
+                    except Exception:
+                        pass
+                    # 显存/内存释放有延迟，让驱动先喘口气
+                    time.sleep(2.5)
+                continue
+            # 旧版 llama.cpp 没有 --fit：逐级降 ngl 回落到 CPU。
+            # 8GB 卡跑 11GB 级 MoE 权重时，全量卸载必然失败，没有这条链就会直接落到「起不来」。
             chain = []
             if ngl > 0:
                 chain.append((ngl, "vulkan", 75.0))
@@ -272,7 +315,6 @@ def ensure(model: str | None = None, port: int = SERVER_PORT, ctx: int = 8192,
                 if _wait_ready(port, wait_s, p):
                     _log(f"已启动 llama-server（{backend}）：{os.path.basename(mp)}")
                     return _snapshot()
-                # 没起来就杀掉换下一种组合
                 try:
                     p.kill()
                 except Exception:
@@ -285,7 +327,6 @@ def ensure(model: str | None = None, port: int = SERVER_PORT, ctx: int = 8192,
                     os.remove(STATE_PATH)
                 except Exception:
                     pass
-                # 显存释放有延迟，立刻重试大概率还是失败，让驱动先喘口气
                 time.sleep(2.5)
         return _snapshot()
 

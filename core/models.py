@@ -66,28 +66,30 @@ TIERS: list[dict] = [
     },
     {
         "id": "h1",
-        "name": "Lumen H1 Turbo",
-        "short": "H1 Turbo",
-        "badge": "中端",
+        "name": "gpt-oss-20b (H1)",
+        "short": "gpt-oss-20b",
+        "badge": "20B MoE",
         "tier_index": 2,
         "min_vram_gb": 8,
         "recommend_vram_gb": 8,
         "params": "20B (MoE 稀疏激活)",
         "ctx": 32768,
         "quant": "Q4_K_M",
-        "disk_gb": 10.8,
-        "vram_use": "8GB 卡建议部分层卸载到内存",
+        "disk_gb": 12.8,
+        "vram_use": "4GB 显存时由 llama.cpp --fit 自动把约 70-80% 权重卸载到内存(RAM)",
         "runtime": "llamacpp",
-        "runtime_label": "内置 llama.cpp · 也可挂 Ollama / OpenAI 兼容端点",
-        "model_file": "H1-Turbo-Q4_K_M.gguf",
-        "model_files": ["H1-Turbo-Q4_K_M.gguf"],
-        "credit": "由「想念也是麻烦」制作",
-        "show_source": False,
-        "source": "",
-        "notice": "licenses/H1-Turbo-NOTICE.txt",
-        "strengths": ["原生 Agentic Coding", "读仓库 / 跑命令 / 改文件", "单发代码与推理强"],
-        "limits": ["多步循环易绕圈，需 Agent 框架兜底",
-                   "权重 10.8GB：8GB 卡要把部分层卸载到内存，实测约 20 t/s（Core 3B 为 110 t/s）"],
+        "runtime_label": "内置 llama.cpp · Vulkan 部分卸载 + 内存(RAM) 兜底",
+        "model_file": "gpt-oss-20b-Q4_K_M.gguf",
+        "model_files": ["gpt-oss-20b-Q4_K_M.gguf", "H1-Turbo-Q4_K_M.gguf"],
+        "credit": "基座 openai/gpt-oss-20b · 由「想念也是麻烦」集成",
+        "show_source": True,
+        "source": "openai/gpt-oss-20b (Apache-2.0)",
+        "notice": "licenses/gpt-oss-NOTICE.txt",
+        "ram_offload": True,
+        "strengths": ["原生 Agentic Coding", "读仓库 / 跑命令 / 改文件", "单发代码与推理强",
+                      "20B MoE 基座，通用能力明显高于 3B"],
+        "limits": ["权重约 12.8GB：4GB 显存机器靠 llama.cpp --fit 卸载到内存(RAM) 可运行，约 3-8 t/s",
+                   "多步循环需 Agent 框架兜底"],
         "capabilities": ["agent", "code", "reason"],
         "defaults": {"num_ctx": 16384, "temperature": 0.55, "reasoning": "low"},
     },
@@ -204,6 +206,12 @@ def decorate(tier: dict, hw: dict, force: bool = False) -> dict:
         out["available"] = True
         out["gate"] = "ok"
         out["gate_reason"] = f"本机显存 {vram}GB，满足 {need}GB 要求"
+    elif tier.get("ram_offload") and vram >= 3.0:
+        # 显存不够装下整张卡，但权重可以靠 llama.cpp --fit 把多余层卸载到内存(RAM)运行。
+        out["available"] = True
+        out["gate"] = "offload"
+        out["gate_reason"] = (f"本机显存 {vram}GB < 建议 {need}GB，将以 llama.cpp --fit "
+                              f"把部分权重卸载到内存(RAM)运行（较慢但可用）")
     else:
         out["available"] = False
         out["gate"] = "locked"
@@ -229,6 +237,9 @@ def recommended_tier(hw: dict | None = None) -> str:
         if t["id"] == "core":
             continue
         if vram >= t["min_vram_gb"] - 0.05:
+            return t["id"]
+        # 显存不足但支持内存(RAM)卸载的档位（如 4GB 跑 20B），仍推荐之
+        if t.get("ram_offload") and vram >= 3.0:
             return t["id"]
     return "core"
 
