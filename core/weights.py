@@ -72,7 +72,7 @@ CATALOG: list[dict] = [
         "size_gb": 2.0,
         "license": "Apache-2.0",
         "upstream": "Qwen/Qwen2.5-3B-Instruct",
-        "note": "随包已内置，一般无需下载；此入口用于重装或换机器补齐",
+        "note": "轻量档位。默认主基座是 gpt-oss-20b；内存较小的机器可改用这个（更快）",
         "urls": [
             "https://hf-mirror.com/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",
             "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",

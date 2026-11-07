@@ -430,9 +430,9 @@ class OfflineCore:
     def reply_stream(self, user_text: str, contexts: list[dict], tier: dict) -> Iterator[dict]:
         head = (
             "> **当前未连接本地模型，以下由 Lumen Core 离线规则引擎生成**（不是语言模型输出）。\n"
-            "> 装上模型后这条提示会消失：把 `H1-Turbo-Q4_K_M.gguf` 放进 `models/`，"
-            "或启动 Ollama 后执行 `ollama create lumen-h1-turbo -f models/Modelfile.h1-turbo`，"
-            "再回到这里点「重新探测」。\n\n"
+            "> 装上模型后这条提示会消失：在「引擎」里点下载主基座 "
+            "`gpt-oss-20b-Q4_K_M.gguf`（约 10.8 GB，走 hf-mirror 镜像、并行加速下载），\n"
+            "> 或把已有的 `.gguf` 放进 `models/`，再回到这里点「重新探测」。\n\n"
         )
         for ch in self._chunk(head):
             yield {"type": "token", "text": ch}

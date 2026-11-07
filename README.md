@@ -137,18 +137,29 @@ Lumen 自带一份 llama.cpp 的 **Vulkan 构建**（`runtime/llamacpp/`）。Vu
 
 ## 3. 模型档位与硬件锁
 
+**主基座锁定 `openai/gpt-oss-20b`**（20.9B MoE，激活 3.6B，Apache-2.0），不降档。
+
 | 档位 | 门槛 | 参数 | 量化 | 运行时 |
 |---|---|---|---|---|
 | **Lumen V1 Ultra** | 显存 ≥ 24GB | 27B | PTQ1_0 三值 | PrismML 定制 llama.cpp |
-| **Lumen H1 Turbo** | 显存 ≥ 8GB | 32B MoE | Q4_K_M | 内置 llama.cpp / Ollama / OpenAI 兼容端点 |
+| **gpt-oss-20b (H1)** | 显存 ≥ 8GB，**显存不足可用内存卸载跑** | 20.9B MoE | Q4_K_M | 内置 llama.cpp / Ollama / OpenAI 兼容端点 |
 | **Lumen mini se** | 显存 ≥ 12GB | 14B | Q4_K_M | 内置 llama.cpp / Ollama |
-| **Lumen Core 3B**（内置兜底） | 无 | 3B | Q4_K_M (GGUF) | 内置 llama.cpp · Vulkan |
+| **Lumen Core 3B**（轻量兜底） | 无 | 3B | Q4_K_M (GGUF) | 内置 llama.cpp · Vulkan |
+
+**显存不够也能跑 20B（内存卸载）**：
+
+内置运行时用 llama.cpp 的 `--fit on -ngl auto --fit-target 256` 启动。它按显存
+自动折算能塞进 VRAM 的层数，**权重比显存大时，多余的部分 mmap 进系统内存**，
+KV cache 也走内存。实测 8GB 显存 + 16GB 内存跑 10.8GB 的 20B：加载约 17 秒，
+生成约 **10~11 tok/s**，答案通顺。
+
+所以「显卡装不下 20B」不是死路：8GB 卡可以跑，4GB 卡也能跑（更慢）。
 
 **硬件锁逻辑**（`core/models.py` → `decorate()`）：
 
 - 检测显存 ≥ 档位门槛 → 可选；
-- 低于门槛 → 档位置灰，鼠标悬停显示「需要 XX GB+ 显存，本机仅 X GB」；
-- 低于门槛时可在设置里开「实验性强制加载」，但会明确标注这是非官方路径。
+- 低于门槛但 ≥3GB → 标记为「内存卸载可运行」，不是禁用；
+- 其余情况 → 档位置灰，鼠标悬停显示「需要 XX GB+ 显存，本机仅 X GB」。
 
 **「置灰」到底指什么（两种情况不是一回事）**：
 
@@ -158,7 +169,7 @@ Lumen 自带一份 llama.cpp 的 **Vulkan 构建**（`runtime/llamacpp/`）。Vu
 | 卡片**没变灰**，但标「待放入 models/xxx.gguf」 | 硬件够，只是权重文件没装 | 点卡片旁的**「获取权重」**一键下载，装完这档立刻真正可用 |
 
 **档位 ≠ 实际权重**：档位是「能力定位标签」，真正跑的是某个 `.gguf`。如果你选了
-H1 Turbo 却没放 H1 的权重，Lumen 会**诚实地退回 Core 3B 并在界面上说明原因**，
+H1 却没放 H1 的权重，Lumen 会**诚实地退回 Core 3B 并在界面上说明原因**，
 而不是让模型自称高档位却跑着低档权重（`core/models.py` → `effective_tier()`）。
 反过来，权重一旦就位，切换档位会自动换成对应权重重启运行时（`/api/tier` → `resolve_weight()`）。
 
@@ -166,24 +177,41 @@ H1 Turbo 却没放 H1 的权重，Lumen 会**诚实地退回 Core 3B 并在界�
 
 | 候选（落地文件名） | 对应档位 | 体积 | 许可证 |
 |---|---|---|---|
-| `H1-Turbo-Q4_K_M.gguf` | H1 Turbo | 10.8GB | Apache-2.0 |
+| `gpt-oss-20b-Q4_K_M.gguf` | gpt-oss-20b (H1) | 10.8GB | Apache-2.0（上游 openai/gpt-oss-20b） |
 | `mini-se-Q4_K_M.gguf` | mini se | 8.4GB | MIT |
-| `Qwen2.5-3B-Instruct-Q4_K_M.gguf` | Core 3B | 2.0GB | Apache-2.0（随包已内置） |
+| `Qwen2.5-3B-Instruct-Q4_K_M.gguf` | Core 3B | 2.0GB | Apache-2.0 |
 
-- 走公开镜像 + 官方仓库，**带断点续传**，中断后重试接着下；
-- 下载完直接落在 `models/`，Lumen 自动识别，不需要手动配置；
-- **权重文件统一以档位名命名**，用户一眼就知道它属于哪一档；
-- 各候选的上游来源与许可证义务统一记在 `licenses/H1-Turbo-NOTICE.txt` 等文件中
-  （不可删除）；
+- 走公开镜像（hf-mirror）+ 官方仓库兜底；
+- **大文件多线程分块并行下载**：单连接被限速约 0.7MB/s（10.8GB 要 4.6 小时），
+  并行 16~24 线程实测 **约 4 分钟**下完；
+- 中断后重试接着下，下载完做**大小 + sha256 校验**（`tools/check_weight.py`）；
+- 下载完直接落在 `models/`，Lumen 自动识别；
 - 自己下载的 `.gguf` 也可以直接丢进 `models/`，Lumen 会认。
+
+**共享机器友好（重要）**：
+
+20B 权重常驻会占约 **8.6GB 内存**，如果这台电脑还有别人在用，会明显影响对方。
+因此内置了三条保护：
+
+1. **闲置自动释放**：`LUMEN_MODEL_IDLE_MINUTES`（默认 10 分钟）内没有请求，
+   自动结束模型进程把内存还给系统；你下次提问时**自动重新加载**（约 17 秒）；
+2. **启动前内存守卫**：可用内存 < 3.5GB 时先等待，而不是硬抢把系统拖进分页；
+3. **绝不结束其他程序**：只回收 Lumen 自己拉起的 llama-server 子进程。
+
+**降智回归闸口**（`tools/regression_eval.py`）：
+
+任何改动（提示词/LoRA/推理参数）后都应跑一次 60 题通用能力评测，量三个指标：
+**通过率 ≥85%**、**过度拒答率 ≤15%**、**模板污染率 ≤10%**；相对基线掉超过
+5 个百分点直接判失败（退出码 2）。加 `--with-system` 会带上 Lumen 真实系统提示，
+专门检测「把握度≤30% 就拒答」的协议是否引发过度拒答。
 
 **合规要点**：
 
 - V1 Ultra 与 mini se 在界面上保留底层来源与「修改增强」标注；
-- H1 Turbo 的原始来源**不在主界面与关于页展示**，但第三方 MIT 许可证要求的版权与许可声明完整保留在 `licenses/H1-Turbo-NOTICE.txt`（该文件不可删除）；
+- **gpt-oss-20b 为上游开源权重**（Apache-2.0），界面如实标注来源，不做「自有模型」暗示；
 - **Lumen Core 3B 不是自研模型**：底层是阿里开源的 Qwen2.5-3B-Instruct（Apache-2.0），
   Lumen 只做集成、量化分发与 Vulkan 加速，**没有自行训练或改写权重**；
-- 其余三档由「想念也是麻烦」制作。
+- 其余档位由「想念也是麻烦」制作。
 
 ---
 
