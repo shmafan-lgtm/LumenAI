@@ -66,8 +66,8 @@ TIERS: list[dict] = [
     },
     {
         "id": "h1",
-        "name": "gpt-oss-20b (H1)",
-        "short": "gpt-oss-20b",
+        "name": "Lumen H1 Turbo",
+        "short": "H1 Turbo",
         "badge": "20B MoE",
         "tier_index": 2,
         "min_vram_gb": 8,
