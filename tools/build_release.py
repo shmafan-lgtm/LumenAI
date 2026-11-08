@@ -104,6 +104,37 @@ def run_pyinstaller(spec: str, distpath: str, workpath: str) -> bool:
     return True
 
 
+def zip_payload() -> bool:
+    """把载荷目录 dist_inst/Lumen 压成 dist_setup/Lumen-Portable.zip。
+
+    安装器 spec（installer/build_installer.spec）强制读取这个 zip，再重压成
+    xz 镶进 Lumen-Setup.exe。之前这一步靠手工补，脚本本身漏了，导致干净构建
+    在安装器阶段因找不到 zip 而崩溃。这里补齐，让构建完全自包含。
+    """
+    import zipfile
+
+    src = PAYLOAD_DIR
+    dst = os.path.join(ROOT, "dist_setup", "Lumen-Portable.zip")
+    if not os.path.isdir(src):
+        log(f"  ✗ 载荷目录不存在：{src}")
+        return False
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    log(f"  压缩载荷 {src} -> {dst} …")
+    total = 0
+    with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as z:
+        for root, dirs, files in os.walk(src):
+            # 跳过编译缓存
+            if "__pycache__" in dirs:
+                dirs.remove("__pycache__")
+            for f in files:
+                fp = os.path.join(root, f)
+                rel = os.path.relpath(fp, src)
+                z.write(fp, rel)
+                total += 1
+    log(f"  ✓ 已压 {total} 个文件，{os.path.getsize(dst)/1024/1024:.1f}MB")
+    return True
+
+
 def verify_payload() -> bool:
     """校验载荷：必须是本次新建的，且 core.* 模块一个不漏。"""
     exe = os.path.join(PAYLOAD_DIR, "Lumen.exe")
@@ -184,6 +215,11 @@ def main() -> int:
     log("[2/3] 校验载荷")
     if not verify_payload():
         log("[RESULT] FAIL — 载荷校验未通过")
+        return 1
+
+    log("[2.5/3] 压缩载荷为 Lumen-Portable.zip（供安装器镶入）")
+    if not zip_payload():
+        log("[RESULT] FAIL — 载荷压缩未通过")
         return 1
 
     log("[3/3] 构建安装器")

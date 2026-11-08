@@ -74,3 +74,6 @@ installer/payload/
 # 后端对外提供的安装器成品（部署时从 dist_setup 复制，不入库）
 payload_service/Lumen-Setup.exe
 payload_service/__pycache__/
+
+# 构建时把旧产物"搬家"暂存的目录（避开批量删除护栏，不入库）
+_trash/
