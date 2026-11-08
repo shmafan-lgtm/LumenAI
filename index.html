@@ -53,11 +53,12 @@
   .dl:hover{transform:translateY(-1px)}
   .dl.ghost{
     background:transparent;border:1px solid var(--line);color:var(--fg);box-shadow:none;
+    padding:13px 20px;font-size:14px;font-weight:500;margin-left:10px;
   }
   .dl.ghost:hover{border-color:var(--accent)}
-  .alt{margin-top:14px;font-size:13px;color:var(--dim)}
-  .alt a{color:#7aa2ff;text-decoration:none}
-  .alt a:hover{text-decoration:underline}
+  .btnrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+  .alt{margin-top:14px;font-size:13px;color:var(--dim);line-height:1.8}
+  .alt b{color:#b9c6de}
   .note{
     margin-top:18px;font-size:13px;color:#7d879c;line-height:1.85;
     background:#10151d;border:1px solid #1e2532;border-left:3px solid var(--accent);
@@ -80,7 +81,8 @@
     <div class="sub">本地化 AI 桌面端 · 模型推理、文件读写、命令执行全部在你自己的电脑上完成</div>
     <div class="badges">
       <span class="badge ok">官方安装器</span>
-      <span class="badge ok">程序已内置</span>
+      <span class="badge ok">客户端已内置</span>
+      <span class="badge ok">尊重系统代理</span>
       <span class="badge">Windows x64</span>
       <span class="badge">v1.0.0</span>
     </div>
@@ -90,19 +92,27 @@
     <span class="tag">推荐</span>
     <h2>下载安装器</h2>
     <div class="desc">
-      安装器为单文件、自包含，已把 AI 主体程序一并压缩打包在内（约 47 MB）。
-      双击后选择安装位置、勾选需要的模型档位即可，无需单独下载任何程序包。
+      安装器为单文件、自包含，已把 AI 客户端程序一并压缩打包在内（约 54 MB）。
+      双击后选择安装位置、勾选需要的模型档位即可，<b>无需、也不提供</b>任何单独的客户端下载。
     </div>
     <div class="meta">
-      <span>大小 <b>约 47 MB</b></span>
+      <span>大小 <b>约 54 MB</b></span>
       <span>Windows <b>x64</b></span>
       <span>含 <b>模型多选</b></span>
       <span>含 <b>桌面快捷方式</b></span>
     </div>
-    <a class="dl" id="dlPrimary" href="https://shmafan-lgtm.github.io/LumenAI/Lumen-Setup.exe">⬇ 下载安装器（官方页）</a>
-    <div class="alt">下载为单文件安装器（约 47 MB），双击即装；如需更快的国内线路可后续切换至对象存储。</div>
+    <div class="btnrow">
+      <a class="dl" id="dlPrimary" href="./Lumen-Setup.exe" download="Lumen-Setup.exe">⬇ 下载安装器</a>
+      <a class="dl ghost" id="dlBackup" href="https://shmafan-lgtm.github.io/LumenAI/Lumen-Setup.exe" download="Lumen-Setup.exe">备用线路</a>
+    </div>
+    <div class="alt">
+      只有一个下载入口：安装器。<b>AI 客户端已镶在安装器内部，站点不提供也无法单独下载客户端。</b>
+      安装器下载模型与组件时会沿用你的系统 / 代理设置，<b>不会禁用代理</b>——公司网络、代理、加速器环境下都能正常下载。
+    </div>
     <div class="note">
-      下载后双击运行。Windows 若弹出「已保护你的电脑」，点<b>更多信息 → 仍要运行</b>。
+      下载后双击运行。Windows 若弹出「已保护你的电脑」，点<b>更多信息 → 仍要运行</b>。<br>
+      <b>若点击后没反应 / 下载很慢 / 失败</b>：① 点右侧「备用线路」；② 右键按钮选「链接另存为」；
+      ③ 本文件托管在 GitHub Pages（约 54 MB），部分地区访问较慢，可开代理 / 加速器、换网络或稍后重试，浏览器支持断点续传。
       安装器会在本机解包内置程序（约 160 MB），请预留足够空间。
     </div>
   </div>
@@ -117,13 +127,14 @@
         <br>· <b>mini se</b>（约 8.4 GB）— 需 12 GB 显存
         <br>· <b>V1 Ultra</b>（约 6.0 GB）— 需 24 GB 显存
       </li>
-      <li>点击「<b>开始安装</b>」，安装器解包内置程序并下载所选模型权重。</li>
+      <li>点击「<b>开始安装</b>」，安装器解包内置程序并下载所选模型权重（自动沿用你的代理设置）。</li>
       <li>安装完成后，双击桌面的 <b>Lumen</b> 图标启动。</li>
     </ol>
   </div>
 
   <footer>
-    Lumen AI v1.0.0 · 本地优先的 AI 工作台
+    Lumen AI v1.0.0 · 本地优先的 AI 工作台<br>
+    源码公开：<a href="https://github.com/shmafan-lgtm/LumenAI" target="_blank" rel="noopener">github.com/shmafan-lgtm/LumenAI</a>
   </footer>
 </div>
 </body>
