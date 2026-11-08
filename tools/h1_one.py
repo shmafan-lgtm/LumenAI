@@ -32,7 +32,7 @@ if 2 in only:
     r2 = B.ask(q2)
     out = os.path.join(B.BENCH_DIR, "hello.py")
     created = os.path.isfile(out)
-    ran = stdout = False, ""
+    ran, stdout = False, ""
     if created:
         import subprocess
         p = subprocess.run([sys.executable, "hello.py"], cwd=B.BENCH_DIR,

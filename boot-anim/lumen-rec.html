@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Lumen Recorder</title>
+<style>html,body{margin:0;height:100%;background:#020307;overflow:hidden}#c{display:block;width:100vw;height:100vh}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+/* ===== Lumen 开机动画（与 lumen-boot.html 同源，用于离线渲染） ===== */
+(function(){
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  const _q = new URLSearchParams(location.search);
+  const RW = parseInt(_q.get('width')||'1920',10);
+  const RH = parseInt(_q.get('height')||'1080',10);
+  let W=RW,H=RH,DPR=1;
+  function resize(){
+    W=RW; H=RH; DPR=1;
+    cv.width = W; cv.height = H;
+    cv.style.width = W+'px'; cv.style.height = H+'px';
+    ctx.setTransform(1,0,0,1,0,0);
+  }
+  resize();
+
+  const D = 9.0;
+  let start = performance.now();
+  let loop = false;
+
+  const clamp=(x,a,b)=>x<a?a:x>b?b:x;
+  const smooth=(e0,e1,x)=>{const t=clamp((x-e0)/(e1-e0),0,1);return t*t*(3-2*t);};
+  const CYAN=[79,209,255], WHITE=[255,255,255], ACC=[123,224,255];
+
+  const N=140;
+  const P=[];
+  for(let i=0;i<N;i++){
+    const ang=Math.random()*Math.PI*2;
+    const spd=0.4+Math.random()*0.9;
+    P.push({ang, spd, r0:0.05+Math.random()*0.05, len:0.04+Math.random()*0.10,
+            tw:Math.random()*Math.PI*2, sz:0.6+Math.random()*1.8, hue:Math.random()});
+  }
+
+  function frame(now){
+    const t = ((now-start)/1000);
+    const tt = loop ? (t % D) : Math.min(t, D);
+
+    ctx.clearRect(0,0,W,H);
+    const bg=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.75);
+    bg.addColorStop(0,'#070b12'); bg.addColorStop(1,'#020307');
+    ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+
+    const cx=W/2, cy=H/2;
+    const baseR=Math.min(W,H)*0.22;
+
+    const coreI=smooth(0.0,1.4,tt);
+    const pulse=1+0.04*Math.sin(tt*2.0);
+    const coreR=baseR*(0.10+0.16*coreI)*pulse;
+    const coreGlow=ctx.createRadialGradient(cx,cy,0,cx,cy,baseR*1.6);
+    coreGlow.addColorStop(0,`rgba(255,255,255,${0.95*coreI})`);
+    coreGlow.addColorStop(0.18,`rgba(${CYAN[0]},${CYAN[1]},${CYAN[2]},${0.6*coreI})`);
+    coreGlow.addColorStop(1,`rgba(${CYAN[0]},${CYAN[1]},${CYAN[2]},0)`);
+    ctx.fillStyle=coreGlow;
+    ctx.beginPath(); ctx.arc(cx,cy,baseR*1.6,0,Math.PI*2); ctx.fill();
+
+    const rayI=smooth(1.2,3.2,tt)*(1-smooth(4.0,6.0,tt));
+    if(rayI>0.001){
+      ctx.save(); ctx.translate(cx,cy); ctx.rotate(tt*0.25);
+      const rays=16;
+      for(let i=0;i<rays;i++){
+        ctx.rotate((Math.PI*2)/rays);
+        const lg=ctx.createLinearGradient(0,0,0,-baseR*2.4);
+        lg.addColorStop(0,`rgba(255,255,255,0)`);
+        lg.addColorStop(0.5,`rgba(${ACC[0]},${ACC[1]},${ACC[2]},${0.22*rayI})`);
+        lg.addColorStop(1,`rgba(${CYAN[0]},${CYAN[1]},${CYAN[2]},0)`);
+        ctx.strokeStyle=lg; ctx.lineWidth=1.4;
+        ctx.beginPath(); ctx.moveTo(0,-baseR*0.5); ctx.lineTo(0,-baseR*2.4); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    const out=smooth(1.4,3.6,tt);
+    const inw=smooth(3.4,5.4,tt);
+    const settle=smooth(5.2,7.0,tt);
+    ctx.save(); ctx.translate(cx,cy);
+    for(let i=0;i<N;i++){
+      const p=P[i];
+      let r;
+      if(out<1) r = baseR*(p.r0 + (0.9*(1-inw)+0.0)*out*1.6);
+      else r = baseR*(p.r0 + 1.6*(1-inw) + (inw)*(0.62));
+      let a=p.ang + tt*0.15*(0.3+settle);
+      const x=Math.cos(a)*r, y=Math.sin(a)*r;
+      const tw=0.5+0.5*Math.sin(tt*3+p.tw);
+      const alpha=(0.25+0.6*tw)*Math.max(out,settle)*coreI;
+      const col = p.hue<0.7?CYAN:WHITE;
+      ctx.fillStyle=`rgba(${col[0]},${col[1]},${col[2]},${clamp(alpha,0,1)})`;
+      ctx.beginPath(); ctx.arc(x,y,p.sz*(0.6+0.6*coreI),0,Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+
+    const ringI=smooth(3.6,5.6,tt);
+    if(ringI>0.001){
+      ctx.save(); ctx.translate(cx,cy); ctx.rotate(tt*0.4);
+      ctx.lineWidth=2.2*ringI;
+      ctx.shadowColor=`rgba(${CYAN[0]},${CYAN[1]},${CYAN[2]},0.9)`;
+      ctx.shadowBlur=22*ringI;
+      const arc=Math.PI*2*ringI;
+      const rg=ctx.createLinearGradient(-baseR,0,baseR,0);
+      rg.addColorStop(0,`rgba(${CYAN[0]},${CYAN[1]},${CYAN[2]},0.15)`);
+      rg.addColorStop(0.5,`rgba(${WHITE[0]},${WHITE[1]},${WHITE[2]},0.95)`);
+      rg.addColorStop(1,`rgba(${CYAN[0]},${CYAN[1]},${CYAN[2]},0.15)`);
+      ctx.strokeStyle=rg;
+      ctx.beginPath(); ctx.arc(0,0,baseR*0.62,0,arc); ctx.stroke();
+      ctx.restore();
+    }
+
+    const reveal=smooth(5.4,7.2,tt);
+    const breathe=1+0.03*Math.sin(tt*2.2);
+    if(reveal>0.001){
+      ctx.save(); ctx.translate(cx,cy); ctx.scale(breathe,breathe);
+      ctx.globalAlpha=reveal;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.shadowColor=`rgba(${CYAN[0]},${CYAN[1]},${CYAN[2]},0.8)`;
+      ctx.shadowBlur=24*reveal;
+      ctx.fillStyle='#eaf6ff';
+      const lw=Math.min(W*0.09, 92);
+      ctx.font=`600 ${lw}px -apple-system,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif`;
+      ctx.fillText('Lumen', 0, -baseR*0.06);
+      ctx.shadowBlur=8*reveal;
+      ctx.fillStyle=`rgba(150,200,235,${0.85*reveal})`;
+      const sw=Math.min(W*0.026, 26);
+      ctx.font=`400 ${sw}px -apple-system,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif`;
+      ctx.fillText('正在点亮…', 0, baseR*0.30);
+      ctx.restore();
+    }
+
+    const vig=ctx.createRadialGradient(cx,cy,baseR*1.2,cx,cy,Math.max(W,H)*0.7);
+    vig.addColorStop(0,'rgba(0,0,0,0)'); vig.addColorStop(1,'rgba(0,0,0,0.55)');
+    ctx.fillStyle=vig; ctx.fillRect(0,0,W,H);
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  function replay(){ start=performance.now(); }
+  window.__lumenReplay = replay;
+
+  const q=new URLSearchParams(location.search);
+  if(q.get('loop')==='1') loop=true;
+
+  /* ===== 录制并回传（离线渲染用） ===== */
+  const SERVER = (q.get('server')||'http://127.0.0.1:8799') + '/upload';
+  const DUR = parseFloat(q.get('dur')||'9.6');
+  const FPS = parseInt(q.get('fps')||'60',10);
+  if(q.get('rec')==='1'){
+    let rec=null, chunks=[];
+    const cands=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+    let mime='';
+    for(const c of cands){ if(window.MediaRecorder && MediaRecorder.isTypeSupported(c)){ mime=c; break; } }
+    setTimeout(()=>{
+      try{
+        const stream=cv.captureStream(FPS);
+        rec = mime ? new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:12000000}) : new MediaRecorder(stream);
+        chunks=[];
+        rec.ondataavailable=e=>{ if(e.data && e.data.size) chunks.push(e.data); };
+        rec.onstop=()=>{
+          const blob=new Blob(chunks,{type:rec.mimeType||'video/webm'});
+          fetch(SERVER,{method:'POST',body:blob}).then(()=>{
+            document.title='UPLOAD_DONE';
+          }).catch(err=>{ document.title='UPLOAD_ERR:'+err; });
+        };
+        if(window.__lumenReplay) window.__lumenReplay();
+        rec.start();
+      }catch(e){ document.title='REC_ERR:'+e; }
+    }, 400);
+    setTimeout(()=>{ if(rec && rec.state==='recording') rec.stop(); }, 400 + DUR*1000);
+  }
+})();
+</script>
+</body>
+</html>

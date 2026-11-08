@@ -97,7 +97,7 @@ def _http_get_parallel(url: str, dest: str, expect: int, on_progress=None,
     total = expect or 0
     if not total:
         try:
-            op = urllib.request.build_opener()
+            op = _make_opener()
             with op.open(urllib.request.Request(final, headers={
                     "Range": "bytes=0-0", "User-Agent": "Lumen-Setup"}), timeout=60) as r:
                 cr = r.headers.get("Content-Range", "")
@@ -126,7 +126,7 @@ def _http_get_parallel(url: str, dest: str, expect: int, on_progress=None,
             try:
                 req = urllib.request.Request(final, headers={
                     "Range": f"bytes={start + got}-{end}", "User-Agent": "Lumen-Setup"})
-                op = urllib.request.build_opener()
+                op = _make_opener()
                 with op.open(req, timeout=120) as r:
                     with open(part, "r+b") as f:
                         f.seek(start + got)
@@ -227,12 +227,28 @@ def _mk_shortcut(shortcut_path: str, target: str, args: str = "",
         return False
 
 
+def _make_opener():
+    """构造 HTTP opener。
+
+    默认沿用系统/环境代理（国内走代理的用户才能拉得动 GitHub / HF 资源）。
+    仅当显式设置 LUMEN_SETUP_NO_PROXY=1 时才强制不走代理——用于代理本身
+    坏了、反而挡住下载的极端环境，普通用户请勿设置。
+    """
+    if os.environ.get("LUMEN_SETUP_NO_PROXY") == "1":
+        return urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    return _make_opener()
+
+
 def _http_get(url: str, dest: str, on_progress=None) -> bool:
-    """下载到 dest（临时文件），带进度回调。失败返回 False。"""
+    """下载到 dest（临时文件），带进度回调。失败返回 False。
+
+    下载完成后做完整性校验：已知 Content-Length 则严格比对；否则至少要求
+    有实际内容（<1KB 视为损坏），避免把半截/错误页当成成功交付。
+    """
     tmp = dest + ".part"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Lumen-Setup"})
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        opener = _make_opener()
         with opener.open(req, timeout=60) as r:
             total = int(r.headers.get("Content-Length") or 0)
             done = 0
@@ -245,6 +261,11 @@ def _http_get(url: str, dest: str, on_progress=None) -> bool:
                     done += len(chunk)
                     if on_progress and total:
                         on_progress(done, total)
+        size = os.path.getsize(tmp)
+        if total and size != total:
+            raise IOError("下载大小不符：期望 %d，实际 %d 字节" % (total, size))
+        if size < 1024:
+            raise IOError("下载文件过小（可能损坏）：%d 字节" % size)
         os.replace(tmp, dest)
         return True
     except Exception:
@@ -480,7 +501,7 @@ class SetupApp:
 
     def _release_asset_url(self, suffix: str) -> str | None:
         try:
-            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            opener = _make_opener()
             req = urllib.request.Request(GITHUB_API.format(repo=GITHUB_REPO),
                                          headers={"User-Agent": "Lumen-Setup"})
             with opener.open(req, timeout=30) as r:

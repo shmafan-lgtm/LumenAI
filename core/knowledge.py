@@ -14,11 +14,15 @@
    中东/非洲/拉美 + 学术 arXiv/bioRxiv + 官方 WHO/UN/NASA/EU + 技术博客…）。
    每个信源独立抓取、独立容错：某个源被墙或改版，只影响它自己。
 
-2. **持续增量刷新（时效）**
-   不是一次性。启动即立即补齐「上次关闭到这次打开之间」的增量，之后常驻循环
-   持续刷新（默认 20 分钟一轮信源、2 小时一轮主题检索）。
+   另加「质量过滤」（用户要求：只挑好的吸收，垃圾直接放掉）：
+   标题党/营销/引流/违规类直接丢弃；论文·AI·科研·权威类加权优先。
+
+2. **实时持续吸收（时效，用户明确要求「实时吸收」）**
+   不是「每 20 分钟爆发一次」，而是**只要 Lumen 开着就一直在吸**：把全部信源切成小批，
+   每 30 秒唤醒一次抓一小批并环形轮转，任意时刻都有信源在被吸收（每个源约每 5 分钟被
+   重新轮询）。启动即先全量补齐，之后无缝进入实时轮询。主题/自适应检索每 15 分钟走一轮。
    每源记录 ETag / Last-Modified，只取新条目，不重复灌库。
-   → 这就是「边使用边更新」：你用 Lumen 的同时，知识库在后台长大。
+   → 这就是「边用边实时吸收」：你用 Lumen 的同时，知识库在后台持续长大。
 
 3. **按使用自适应扩展（覆盖你的真实关注点）**
    用户问过的问题会被提炼成主题词，自动并入主题检索队列。
@@ -98,6 +102,18 @@ FEEDS: list[tuple[str, str, str]] = [
     ("arXiv stat.ML", "http://export.arxiv.org/rss/stat.ML", "en"),
     ("bioRxiv", "http://connect.biorxiv.org/biorxiv_xml.php?subject=all", "en"),
     ("medRxiv", "http://connect.medrxiv.org/medrxiv_xml.php?subject=all", "en"),
+    # —— 新增：高质量 AI / 学术信源（精挑细选，主攻论文与 AI 界）——
+    ("MIT News AI", "https://news.mit.edu/rss/topic/artificial-intelligence2", "en"),
+    ("BAIR Berkeley", "https://bair.berkeley.edu/blog/feed.xml", "en"),
+    ("The Gradient", "https://thegradient.pub/rss/", "en"),
+    ("Google Research", "https://research.google/blog/rss/", "en"),
+    ("Microsoft Research", "https://www.microsoft.com/en-us/research/feed/", "en"),
+    ("ACM TechNews", "https://technews.acm.org/rss/technews.rss", "en"),
+    ("IEEE Spectrum AI", "https://spectrum.ieee.org/feeds/topic/artificial-intelligence.rss", "en"),
+    ("arXiv cs.CV", "http://export.arxiv.org/rss/cs.CV", "en"),
+    ("arXiv cs.RO", "http://export.arxiv.org/rss/cs.RO", "en"),
+    ("arXiv eess.AS", "http://export.arxiv.org/rss/eess.AS", "en"),
+    ("arXiv math.GT", "http://export.arxiv.org/rss/math.GT", "en"),
 ]
 
 # 主题检索表：覆盖尽量广的公开领域 + 多语种（比固定清单宽得多）
@@ -126,10 +142,12 @@ TOPICS: list[str] = [
     "أخبار العالم اليوم", "विश्व समाचार आज", "berita dunia terbaru",
 ]
 
-# 刷新节奏
-FEED_INTERVAL = 20 * 60          # 信源轮询：20 分钟
-TOPIC_INTERVAL = 2 * 3600        # 主题检索：2 小时
-ABSORB_GAP = 300                 # 距上次吸收超过 5 分钟即视为「有更新的日子」，启动即补齐
+# 实时吸收节奏（用户要求：打开 Lumen 即实时持续吸收全球高质量知识）
+TICK = 30                        # 主循环节拍：每 30 秒唤醒一次
+FEED_CHUNK = 6                   # 每拍抓取的信源数（环形轮转分片，任意时刻都有源在被吸收）
+FEED_REFRESH_MIN = 5            # 每个信源大致每 5 分钟被重新轮询一次（55源/6每拍≈9拍×30s≈4.5min）
+TOPIC_INTERVAL = 15 * 60        # 主题/自适应检索：每 15 分钟一轮
+ABSORB_GAP = 120                 # 容错窗口（现以实时轮询为主，保留向后兼容）
 MAX_PER_SOURCE = 12              # 每个信源单轮最多收多少条
 MAX_PER_TOPIC = 4                # 每个主题最多收多少条
 MAX_KB_ITEMS = 4000              # 知识库上限，超出按时间淘汰最旧
@@ -140,8 +158,60 @@ _CJK_RE = re.compile(r"[\u4e00-\u9fff]+")
 _HTML_RE = re.compile(r"<[^>]+>")
 _ENT_RE = re.compile(r"&[a-zA-Z#0-9]+;")
 
+# ---------------------------------------------------------------------------
+# 质量过滤：只吸收「好」的要闻，垃圾直接放掉（用户明确要求）
+# ---------------------------------------------------------------------------
+# 垃圾词（命中任一即丢弃）：标题党/噱头、营销促销、引流关注、低质违规。
+_JUNK_WORDS = [
+    # 标题党 / 噱头
+    "震惊", "不敢相信", "万万没想到", "惊呆", "吓人", "真相竟然", "颠覆认知",
+    "炸锅", "沸了", "速看", "速转",
+    # 营销 / 促销
+    "广告", "推广", "促销", "秒杀", "限时", "抢购", "优惠券", "福利", "免费领",
+    "0元", "包邮", "打折", "带货", "直播带货", "双11", "618", "满减", "返现",
+    # 引流 / 关注
+    "抽奖", "点赞", "关注我们", "扫码", "加微信", "微信号", "客服微信", "私聊",
+    # 低质 / 违规
+    "彩票", "私服", "成人", "约炮", "一夜情", "壮阳", "减肥", "代购", "刷单",
+    "兼职日赚", "日赚", "返利", "博彩", "赌博", "加盟", "招代理",
+]
+# 高质量信号（命中任一 → 检索加权优先，并作为「值得留」的强偏好）
+_QUALITY_WORDS = [
+    "论文", "研究", "报告", "发表于", "arxiv", "nature", "science", "期刊",
+    "实验", "发现", "突破", "数据集", "基准", "综述", "学术",
+    "人工智能", "大模型", "模型", "开源", "发布", "芯片", "半导体", "量子",
+    "航天", "卫星", "空间站", "火箭", "医疗", "临床", "指南", "政策", "规定",
+    "决议", "协议", "公报", "标准", "数据", "发布",
+    "release", "paper", "research", "model", "open source", "dataset",
+    "benchmark", "breakthrough", "study", "findings", "launch", "policy",
+    "artificial intelligence", "machine learning", "neural", "algorithm",
+]
+_JUNK_RE = re.compile("|".join(re.escape(w) for w in _JUNK_WORDS))
+_QUALITY_RE = re.compile("|".join(re.escape(w) for w in _QUALITY_WORDS), re.IGNORECASE)
+
+
+def _is_junk(title: str, snippet: str) -> bool:
+    """判断一条要不要丢。命中垃圾词、标题过短、或标题过度标点（标题党）即丢。"""
+    t = (title or "").strip()
+    s = (snippet or "").strip()
+    if len(t) < 4:                       # 标题太短，无信息量
+        return True
+    blob = t + " " + s
+    if _JUNK_RE.search(blob):             # 命中垃圾词
+        return True
+    if re.search(r"[!！?？]{3,}", t):     # 标题堆感叹/问号，典型标题党
+        return True
+    return False
+
+
+def _quality_boost(title: str, snippet: str) -> float:
+    """论文/AI/科研/权威类给 1.4 倍检索加权，让「好内容」优先浮出。"""
+    blob = ((title or "") + " " + (snippet or "")).lower()
+    return 1.4 if _QUALITY_RE.search(blob) else 1.0
+
 _lock = threading.Lock()
 _running = False
+_stop = threading.Event()
 _state: dict = {"kb": [], "meta": {}, "adaptive": []}
 _fresh_lock = threading.Lock()
 
@@ -241,6 +311,30 @@ def _fetch(url: str, etag: str = "", last_mod: str = "", timeout: float = 12.0):
         return (0, b"", etag, last_mod)
 
 
+def _fetch_with_wall(url: str, etag: str = "", last_mod: str = "", timeout: float = 12.0):
+    """带「墙钟」硬上限的抓取。
+
+    urllib 的 timeout **不覆盖 DNS 解析**（getaddrinfo 在多数平台不受 socket
+    超时约束）。若某源主机 DNS 被黑洞（不拒绝也不响应），_fetch 会无限挂起，
+    进而把整个后台吸收循环拖死。这里用守护线程跑 _fetch 并 join(timeout+3)，
+    超时即判为不可达——哪怕底层仍卡着，循环也不会被拖垮。
+    """
+    box: dict = {}
+
+    def _run():
+        try:
+            box["r"] = _fetch(url, etag, last_mod, timeout)
+        except Exception:
+            box["r"] = (0, b"", etag, last_mod)
+
+    th = threading.Thread(target=_run, daemon=True)
+    th.start()
+    th.join(timeout + 3.0)
+    if "r" not in box:
+        return (0, b"", etag, last_mod)
+    return box["r"]
+
+
 def _text(node, tags) -> str:
     for t in tags:
         el = node.find(t)
@@ -296,19 +390,20 @@ def _parse_feed(raw: bytes) -> list[dict]:
     return out
 
 
-def _absorb_feeds() -> int:
-    """全量刷新所有信源（增量：ETag/Last-Modified），返回新增条目数。
+def _absorb_feeds(feeds: list | None = None) -> int:
+    """刷新给定信源（增量：ETag/Last-Modified），返回新增条目数。
 
-    并行抓取：44 个源里常有被墙/改版的，串行的话每个不可达的都要干等超时
-    （12s × 16 ≈ 3 分钟）。并行后整轮压到几十秒。
+    不传 feeds 则刷新全部。实时轮询时每拍只传一小批（环形分片）。
+    并行抓取：不可达的源各自超时返回 0，不影响其它源。
     """
     from concurrent.futures import ThreadPoolExecutor
 
     def one(feed):
         name, url, lang = feed
         prev = _state["meta"].get(url) or {}
+        etag = last_mod = ""
         try:
-            code, raw, etag, last_mod = _fetch(url, prev.get("etag", ""), prev.get("last", ""))
+            code, raw, etag, last_mod = _fetch_with_wall(url, prev.get("etag", ""), prev.get("last", ""))
         except Exception:
             return name, url, lang, 0, etag, last_mod, None
         if code == 304 or code == 0 or not raw:
@@ -320,7 +415,7 @@ def _absorb_feeds() -> int:
         return name, url, lang, 1, etag, last_mod, items
 
     with ThreadPoolExecutor(max_workers=12) as pool:
-        results = list(pool.map(one, FEEDS))
+        results = list(pool.map(one, feeds if feeds is not None else FEEDS))
 
     added = 0
     seen = {_norm_url(it.get("url", "")) for it in _state["kb"]}
@@ -333,14 +428,18 @@ def _absorb_feeds() -> int:
         for it in items or []:
             if got >= MAX_PER_SOURCE:
                 break
+            raw_title = it.get("title") or ""
+            raw_snip = it.get("snippet") or ""
+            if not raw_title or _is_junk(raw_title, raw_snip):
+                continue
             u = _norm_url(it.get("url", ""))
-            th = hashlib.md5((it.get("title") or "").encode("utf-8", "ignore")).hexdigest()
+            th = hashlib.md5(raw_title.encode("utf-8", "ignore")).hexdigest()
             if not u or u in seen or th in seen_title:
                 continue
             _state["kb"].append({
                 "source": name, "lang": lang,
-                "title": _clean_text(it["title"])[:200], "url": it["url"],
-                "snippet": _clean_text(it.get("snippet") or "")[:600],
+                "title": _clean_text(raw_title)[:200], "url": it["url"],
+                "snippet": _clean_text(raw_snip)[:600],
                 "published": it.get("published", ""), "ts": time.time(),
             })
             seen.add(u)
@@ -375,8 +474,12 @@ def _absorb_topics(topics: list[str]) -> int:
         for res in (r.get("results") or [])[:MAX_PER_TOPIC]:
             u = _norm_url(res.get("url", ""))
             title = (res.get("title") or "").strip()
+            if not u or not title:
+                continue
+            if _is_junk(title, res.get("snippet") or ""):
+                continue
             th = hashlib.md5(title.encode("utf-8", "ignore")).hexdigest()
-            if not u or not title or u in seen or th in seen_title:
+            if u in seen or th in seen_title:
                 continue
             _state["kb"].append({
                 "source": "检索:" + topic[:24], "lang": "auto",
@@ -423,12 +526,14 @@ def relevant(query: str, k: int = 4, max_chars: int = 1400) -> str:
             # 越新权重略高（同样命中时优先给最新）
             age_days = (time.time() - float(it.get("ts", 0) or 0)) / 86400.0
             boost = 1.0 / (1.0 + age_days / 30.0)
-            scored.append((score * boost, it))
+            qb = _quality_boost(it.get("title", ""), it.get("snippet", ""))
+            scored.append((score * boost * qb, it))
     scored.sort(key=lambda x: -x[0])
     lines = ["以下是 Lumen 已自动吸收的最新联网资料（编号即引用编号），可作为回答依据：", ""]
     used = 0
     for i, (_s, it) in enumerate(scored, 1):
-        if len(lines) > k:
+        # 注意 lines 含 2 行头，要留足位置给 k 条；之前写 `> k` 会少返回 1 条（k-1 条）。
+        if i > k:
             break
         snip = _clean_text(it.get("snippet") or "")[:300]
         ttl = _clean_text(it.get("title") or "")[:120]
@@ -479,51 +584,68 @@ def absorb_now(feeds: bool = True, topics: bool = True) -> int:
 
 
 def _worker() -> None:
-    """常驻循环：启动先补齐增量，之后持续刷新（边用边更新）。"""
-    meta_last = 0.0
+    """实时持续吸收：只要 Lumen 开着，就一直在后台吸收全球高质量知识。
+
+    把全部信源切成小批，每 TICK（默认 30s）抓一小批并环形轮转，整轮在约
+    FEED_REFRESH_MIN 分钟内转完 → 任意时刻都有信源在被吸收，而非「20 分钟爆发一次」。
+    主题/自适应检索每 TOPIC_INTERVAL 走一轮。启动即先全量补齐，之后无缝实时轮询。
+    """
+    # —— 启动即时全量吸收（一打开 Lumen 就先吸一遍）——
     try:
-        with open(META_PATH, "r", encoding="utf-8") as f:
-            meta_last = float((json.load(f) or {}).get("last_absorb", 0) or 0)
+        absorb_now(feeds=True, topics=False)
     except Exception:
         pass
-    now = time.time()
-    # 启动即补齐「上次关闭到这次打开之间」的增量
-    if now - meta_last > ABSORB_GAP:
-        try:
-            absorb_now(feeds=True, topics=False)
-        except Exception:
-            pass
-    last_feed = 0.0
+    n = len(FEEDS)
+    feed_idx = 0
     last_topic = 0.0
-    while True:
-        time.sleep(60)
+    while not _stop.is_set():
+        time.sleep(TICK)
+        if _stop.is_set():
+            break
         t = time.time()
-        try:
-            if t - last_feed >= FEED_INTERVAL:
-                last_feed = t
+        # 取本拍要抓的一小批信源（环形轮转，无重叠分片）
+        batch = [FEEDS[i % n] for i in range(feed_idx, feed_idx + FEED_CHUNK)]
+        feed_idx = (feed_idx + FEED_CHUNK) % n
+        if batch:
+            try:
                 with _fresh_lock:
-                    _absorb_feeds()
+                    _absorb_feeds(batch)
                     _trim()
                     _save()
-            if t - last_topic >= TOPIC_INTERVAL:
-                last_topic = t
-                tp = list(TOPICS) + list(_state["adaptive"])
+            except Exception:
+                pass
+        # 主题/自适应检索（周期）
+        if t - last_topic >= TOPIC_INTERVAL:
+            last_topic = t
+            tp = list(TOPICS) + list(_state["adaptive"])
+            try:
                 with _fresh_lock:
                     _absorb_topics(tp)
                     _trim()
                     _save()
-        except Exception:
-            pass
+            except Exception:
+                pass
 
 
 def start(background: bool = True) -> None:
-    """启动后台吸收线程（幂等）。在 server.serve() 里调用一次即可。"""
+    """启动后台实时吸收线程（幂等）。在 server.serve() 里调用一次即可。
+
+    只要 Lumen 开着，这个线程就会持续、实时地吸收全球高质量知识。
+    """
     global _running
+    _stop.clear()
     if _running:
         return
     _running = True
     t = threading.Thread(target=_worker, daemon=True, name="knowledge-absorber")
     t.start()
+
+
+def stop() -> None:
+    """停止后台吸收线程（server 关闭时调用）。"""
+    global _running
+    _stop.set()
+    _running = False
 
 
 def status() -> dict:
@@ -548,14 +670,24 @@ def status() -> dict:
         "adaptive_topics": len(adaptive),
         "last_absorb": last,
         "top_sources": sorted(srcs.items(), key=lambda x: -x[1])[:8],
-        "interval_feed_min": FEED_INTERVAL // 60,
+        "mode": "realtime",
+        "tick_sec": TICK,
+        "feed_chunk": FEED_CHUNK,
+        "feed_refresh_min": FEED_REFRESH_MIN,
         "interval_topic_min": TOPIC_INTERVAL // 60,
     }
 
 
 if __name__ == "__main__":
     import sys
-    n = absorb_now(feeds="--feeds-only" not in sys.argv,
-                   topics="--topics-only" not in sys.argv)
+    only_feeds = "--feeds-only" in sys.argv
+    only_topics = "--topics-only" in sys.argv
+    if only_feeds:
+        feeds, topics = True, False
+    elif only_topics:
+        feeds, topics = False, True
+    else:
+        feeds, topics = True, True
+    n = absorb_now(feeds=feeds, topics=topics)
     print(json.dumps(status(), ensure_ascii=False, indent=2))
     print(f"absorbed {n} items")

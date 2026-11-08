@@ -306,12 +306,16 @@ def _download(url: str, dest: str, expect: int, weight_id: str) -> None:
     if expect >= 512 * 1024 * 1024:
         try:
             _download_parallel(url, dest, expect, weight_id)
+        except Exception as e:
+            config.log("weights.log", f"{weight_id} 并行下载失败，回落单连接：{e}")
+        else:
+            # 并行下载成功；若中途被用户取消，_download_parallel 已写入 cancelled，这里不要再覆盖成 done
+            if _task["cancel"]:
+                return
             _write_state({"id": weight_id, "state": "done", "received": expect, "total": expect,
                           "percent": 100, "file": os.path.basename(dest),
                           "text": f"已下载 {_human(expect)}"})
             return
-        except Exception as e:
-            config.log("weights.log", f"{weight_id} 并行下载失败，回落单连接：{e}")
     _download_serial(url, dest, expect, weight_id)
 
 
@@ -398,6 +402,9 @@ def _worker(weight_id: str) -> None:
                           "total": w["bytes"], "percent": 0, "file": w["file"],
                           "text": "连接中…"})
             _download(url, dest, w["bytes"], weight_id)
+            if _task["cancel"]:
+                # 中途被用户取消，_download 内部已写入 cancelled，切勿覆盖成 done
+                return
             _write_state({"id": weight_id, "state": "done", "received": w["bytes"],
                           "total": w["bytes"], "percent": 100, "file": w["file"],
                           "text": f"下载完成：{w['file']}"})

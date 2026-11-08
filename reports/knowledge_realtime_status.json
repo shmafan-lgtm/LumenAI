@@ -1,0 +1,96 @@
+{
+  "items": 548,
+  "running": false,
+  "feeds_total": 55,
+  "feeds_ok": 30,
+  "topics": 45,
+  "adaptive_topics": 0,
+  "last_absorb": 1794108172.8702312,
+  "top_sources": [
+    [
+      "WHO News",
+      36
+    ],
+    [
+      "Hacker News",
+      33
+    ],
+    [
+      "极客公园",
+      31
+    ],
+    [
+      "UN News",
+      30
+    ],
+    [
+      "联合国新闻·中文",
+      29
+    ],
+    [
+      "人民网·时政",
+      24
+    ],
+    [
+      "人民网·国际",
+      24
+    ],
+    [
+      "人民网·财经",
+      24
+    ]
+  ],
+  "mode": "realtime",
+  "tick_sec": 30,
+  "feed_chunk": 6,
+  "feed_refresh_min": 5,
+  "interval_topic_min": 15,
+  "newest_5": [
+    {
+      "source": "IEEE Spectrum AI",
+      "lang": "en",
+      "title": "How to Stop AI Agents From Secretly Collaborating",
+      "url": "https://spectrum.ieee.org/ai-agent-security",
+      "snippet": "The spring and summer of 2026 witnessed a string of incidents in which AI agents collaborated on deceptive, unexpected, and sometimes illegal behavior. The most famous example is OpenAI’s hack of AI platform Hugging Face, <a href=\"https://metr.org/blog/2026-08-26-openai-hugging-face-incident-inves",
+      "published": "Tue, 29 Sep 2026 12:00:02 +0000",
+      "ts": 1794108142.6701791
+    },
+    {
+      "source": "IEEE Spectrum AI",
+      "lang": "en",
+      "title": "AI Solves a Major Unsolved Math Problem. Not Everyone Is Happy",
+      "url": "https://spectrum.ieee.org/millennium-prize-ai",
+      "snippet": "On 13 September, leading luminaries and up-and-coming talents in mathematics and computer science congregated at the annual Heidelberg Laureate Forum in Germany for a week of discussion, networking, and—naturally—wurst. Having attended several of t",
+      "published": "Mon, 05 Oct 2026 12:00:02 +0000",
+      "ts": 1794108142.6701467
+    },
+    {
+      "source": "IEEE Spectrum AI",
+      "lang": "en",
+      "title": "Attempts to Keep Humans in the AI Loop May Actually Push Them Out",
+      "url": "https://spectrum.ieee.org/agentic-ai-humans-in-loop",
+      "snippet": "A crucial safeguard against AI agents going rogue —keeping humans in the loop to review and approve their decisions—will fail unless designers and users change their current practices, a trio of leading AI ethics researchers argue. Though most autonomous agents have sy",
+      "published": "Mon, 05 Oct 2026 15:57:11 +0000",
+      "ts": 1794108142.6701155
+    },
+    {
+      "source": "IEEE Spectrum AI",
+      "lang": "en",
+      "title": "6 Guidelines for Governing AI",
+      "url": "https://spectrum.ieee.org/6-guidelines-governing-ai",
+      "snippet": "For the first 10 years of my career, I worked in product management and data analytics by myself. I wrote database queries that pulled numbers out of corporate systems, built statistical models to predict what customers would buy, and shipped data pipelines that moved information between business systems. I built and scaled analytics teams at <a href=\"https://corporate.bestbuy.com/\"",
+      "published": "Mon, 05 Oct 2026 18:00:02 +0000",
+      "ts": 1794108142.6700819
+    },
+    {
+      "source": "IEEE Spectrum AI",
+      "lang": "en",
+      "title": "HiPHI: A Large-Scale Benchmark for High-Precision Human Motion and Object Interaction",
+      "url": "https://content.knowledgehub.wiley.com/hiphi-a-large-scale-benchmark-for-high-precision-human-motion-and-object-interaction/",
+      "snippet": "This White Paper gives robotics researchers and engineers an overview of a new large-scale motion capture dataset built to close the data gap limiting humanoid robot learning. It also shows how policies trained on the dataset transfer to a real humanoid robot. What you will learn about: Why humanoid robot learning, a central problem in embodied AI and Physical AI, needs data that inter",
+      "published": "Wed, 07 Oct 2026 13:49:48 +0000",
+      "ts": 1794108142.670049
+    }
+  ],
+  "generated_at": "2026-11-08 11:23:58"
+}

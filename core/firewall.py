@@ -178,14 +178,6 @@ def _all_rules() -> list[dict]:
     rc, out = _netsh(["show", "rule", "name=all"])
     if rc != 0:
         return []
-    # 中文 netsh 输出是 GBK，这里按多编码尝试
-    for enc in ("utf-8", "gbk"):
-        try:
-            rc2, o = _netsh(["show", "rule", "name=all"])
-            out = o
-            break
-        except Exception:
-            continue
     return _parse_rules(out)
 
 

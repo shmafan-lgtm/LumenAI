@@ -33,7 +33,7 @@ def call(method, path, body=None, raw=False):
                 return r.status, json.loads(payload.decode("utf-8")), dict(r.headers)
             except Exception:
                 return r.status, payload[:400], dict(r.headers)
-    except urllib.error.HTTPError as e:
+    except (urllib.error.HTTPError, urllib.error.URLError) as e:
         payload = e.read()
         if raw:
             return e.code, payload, dict(e.headers)

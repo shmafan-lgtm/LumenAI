@@ -449,7 +449,9 @@ def handle_command(cmd: dict, session_id: str | None) -> dict:
             return {"ok": True, "throttled": True}
         mover.set_target(float(cmd.get("x", 0.5)), float(cmd.get("y", 0.5)),
                          float(cmd.get("speed", 1.0)))
-        gate.session and gate.session.update({"last_input": time.time()})
+        if gate.session:
+            with gate.lock:
+                gate.session.update({"last_input": time.time()})
         return {"ok": True}
     if kind == "click":
         if not limiter.allow("click", LIMITS["click_per_sec"]):
@@ -471,8 +473,9 @@ def handle_command(cmd: dict, session_id: str | None) -> dict:
         return {"ok": False, "error": f"未知指令 {kind}"}
 
     if gate.session:
-        gate.session["last_input"] = time.time()
-        gate.session["clicks"] = gate.session.get("clicks", 0) + 1
+        with gate.lock:
+            gate.session["last_input"] = time.time()
+            gate.session["clicks"] = gate.session.get("clicks", 0) + 1
     return {"ok": True}
 
 

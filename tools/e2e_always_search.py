@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 
@@ -90,7 +91,8 @@ def main() -> int:
             print(f"   ({t}) {m}")
     print(f"\n【回答】\n{r['reply'][:1200]}")
 
-    has_cite = "[1]" in r["reply"] or "[2]" in r["reply"]
+    # 接受任意 [n] 编号引用（模型可能引用 [3] 而非 [1]/[2]，原严格判断会误判）
+    has_cite = bool(re.search(r"\[\d+\]", r["reply"]))
     checks = [
         ("始终联网模式已开启", se.get("mode") == "always"),
         ("触发了联网查证", any(("检索" in s or "查证" in s) for s in r["statuses"])),

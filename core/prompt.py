@@ -12,6 +12,7 @@ import platform
 import re
 
 from . import config, hardware, models, search
+from .programming_expert import programming_expert_block
 
 TOOLS_DOC = """可用工具（需要时输出一段 XML 标签，标签外不要再写任何解释，工具结果会作为新的 user 消息回给你）：
 
@@ -171,6 +172,10 @@ def system_prompt(tier: dict, st: dict, ws: str, runtime_model: str = "",
         "- 有把握或已有证据时正常作答；不确定但 >30% 把握时，先说明不确定性，再给最可能答案并标注引用。",
         "",
     ]
+
+    # 「编程专家」内置插件：无条件注入系统提示，没有任何配置开关可以关闭它。
+    parts.append(programming_expert_block())
+
     parts = [p for p in parts if p != ""]
 
     if agent_on:

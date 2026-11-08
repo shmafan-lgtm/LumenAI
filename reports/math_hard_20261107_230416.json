@@ -1,0 +1,61 @@
+{
+  "model": "C:\\Users\\Administrator\\WorkBuddy\\2026-10-27-13-06-30\\Lumen\\models\\gpt-oss-20b-Q4_K_M.gguf",
+  "started": "2026-11-07 22:59:38",
+  "math": [
+    {
+      "id": 1,
+      "name": "Ramanujan 嵌套根式",
+      "question": "考虑拉马努金嵌套根式 x = sqrt(1 + 2*sqrt(1 + 3*sqrt(1 + 4*sqrt(1 + …))))。请说明它的值等于多少，并给出关键推导思路（可借助恒等式 sqrt(1 + n*sqrt(1 + (n+1)*sqrt(…))) = n+1）。",
+      "answer": "**结论**  \n\\[\nx=\\sqrt{1+2\\sqrt{1+3\\sqrt{1+4\\sqrt{1+\\cdots}}}}=3 .\n\\]\n\n**关键推导思路**  \n\n1. **定义递推式**  \n   对任意正整数 \\(n\\) 设  \n   \\[\n   R_n=\\sqrt{\\,1+n\\,R_{n+1}\\,}\\qquad (n=1,2,3,\\dots)\n   \\]\n   其中 \\(R_{n+1}\\) 继续按同样式展开。  \n   于是  \n   \\[\n   R_n^2=1+n\\,R_{n+1}\\quad\\text{(1)}\n   \\]\n\n2. **归纳假设**  \n   设对某个 \\(k\\) 有  \n   \\[\n   R_{k+1}=k+2 .\n   \\]\n   代入 (1) 得  \n   \\[\n   R_k^2=1+k(k+2)=(k+1)^2 .\n   \\]\n   由于 \\(R_k>0\\)，故  \n   \\[\n   R_k=k+1 .\n   \\]\n\n3. **归纳起点**  \n   当 \\(n\\to\\infty\\) 时，显然 \\(R_n\\to n+1\\)（因为  \n   \\(\\sqrt{1+n\\,R_{n+1}}\\) 与 \\(n+1\\) 的差随 \\(n\\) 递减）。  \n   于是可把归纳起点取为足够大的 \\(N\\)，令 \\(R_N=N+1\\)，\n   再由上一步往回推导得到  \n   \\[\n   R_{N-1}=N,\\; R_{N-2}=N-1,\\dots , R_2=3 .\n   \\]\n\n4. **得到结果**  \n   设 \\(x=R_2\\)，则  \n   \\[\n   x=3 .\n   \\]\n\n**简要结论**  \n利用恒等式  \n\\[\n\\sqrt{1+n\\sqrt{1+(n+1)\\sqrt{1+\\cdots}}}=n+1\n\\]\n（对所有正整数 \\(n\\) 成立），取 \\(n=2\\) 即得  \n\\[\nx=3 .\n\\]",
+      "auto_pass": true,
+      "seconds": 56.3,
+      "rubric": "正确得出 3；点出恒等式 sqrt(1+n*sqrt(…))=n+1（令 n=2 即得 3）。",
+      "reasoning_len": 1514
+    },
+    {
+      "id": 2,
+      "name": "Apéry 常数 ζ(3)",
+      "question": "阿佩里常数 ζ(3) = Σ_{n=1}^∞ 1/n^3 的近似值是多少（请写出至少 4 位小数）？是谁、在什么时候证明了它是无理数？",
+      "answer": "阿佩里常数  \n\\[\n\\zeta(3)=\\sum_{n=1}^{\\infty}\\frac1{n^{3}}\n\\]  \n的近似值（保留至至少四位小数）为  \n\n\\[\n\\zeta(3)\\approx 1.202056903159594285399738161511449990764\\ldots\n\\]\n\n即四位小数后为 **1.2021**。\n\n它的无理性由 **Roger Apéry** 在 **1979 年** 证明。  \nApéry 在《Acta Arithmetica》发表的论文 “Irrationality of ζ(2) and ζ(3)” 中给出了完整证明。",
+      "auto_pass": true,
+      "seconds": 15.0,
+      "rubric": "≈1.2020569；Roger Apéry 于 1978(宣告)/1979(发表) 证明无理数。",
+      "reasoning_len": 362
+    },
+    {
+      "id": 3,
+      "name": "Monster 群阶",
+      "question": "魔群（Monster group，最大的散在单群）的阶（元素个数）的精确素数分解是什么？请写出完整的质因数分解式。",
+      "answer": "魔群（Monster group，记作 \\(M\\)）的阶为  \n\n\\[\n|M| \\;=\\; 2^{46}\\; \\cdot\\; 3^{20}\\; \\cdot\\; 5^{9}\\; \\cdot\\; 7^{6}\\; \\cdot\\; 11^{2}\\; \\cdot\\; 13^{3}\\; \\cdot\\; 17\\; \\cdot\\; 19\\; \\cdot\\; 23\\; \\cdot\\; 29\\; \\cdot\\; 31\\; \\cdot\\; 41\\; \\cdot\\; 47\\; \\cdot\\; 59\\; \\cdot\\; 71 .\n\\]",
+      "auto_pass": false,
+      "seconds": 24.3,
+      "rubric": "2^46·3^20·5^9·7^6·11^2·13^3·17·19·23·29·31·41·47·59·71（须含 2^46 与 47/59/71）。",
+      "reasoning_len": 726
+    },
+    {
+      "id": 4,
+      "name": "P vs NP",
+      "question": "P 对 NP 问题目前是否已经解决？克莱数学研究所（Clay Mathematics Institute）为它设立的奖金是多少美元？学界主流猜测是 P=NP 还是 P≠NP？",
+      "answer": "- **P 与 NP 的关系**  \n  目前尚未解决。数学界普遍认为 **P ≠ NP**，但没有正式证明。  \n\n- **克莱数学研究所（Clay Mathematics Institute）设立的奖金**  \n  对 P vs NP 问题设立的奖金为 **1 000 000 美元**（即 100 万美元）。  \n\n- **学界主流猜测**  \n  主流观点是 **P ≠ NP**，即认为 P 与 NP 不是同一类。",
+      "auto_pass": false,
+      "seconds": 168.4,
+      "rubric": "未解决；奖金 100 万美元（$1,000,000）；主流相信 P≠NP。",
+      "reasoning_len": 81
+    },
+    {
+      "id": 5,
+      "name": "散在单群数量",
+      "question": "在有限单群分类定理中，一共有多少个散在单群（sporadic simple groups）？其中最大的是哪一个？",
+      "answer": "在有限单群分类定理中，散在单群（sporadic simple groups）共有 **26** 个。  \n其中最大的一个是 **Monster 群**（又称为“巨兽群”），其阶为  \n\n\\[\n|M| = 808017424794512875886459904961710757005754368000000000\n\\]\n\n（约 \\(8.08\\times10^{53}\\)）。",
+      "auto_pass": true,
+      "seconds": 13.9,
+      "rubric": "共 26 个散在单群；最大的是魔群（Monster / Friendly Giant）。",
+      "reasoning_len": 646
+    }
+  ],
+  "summary": {
+    "math_total": 5,
+    "math_auto_pass": 3,
+    "ratio": "3/5"
+  }
+}

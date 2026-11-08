@@ -499,7 +499,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, body, "text/html; charset=utf-8")
 
     def _serve_asset(self, rel: str):
-        rel = posixpath.normpath(rel).lstrip("/")
+        # 先把反斜杠归一化，防止 Windows 下 `%5c`/反斜杠绕过 normpath 造成路径穿越
+        rel = posixpath.normpath(rel.replace("\\", "/")).lstrip("/")
         if rel.startswith("..") or ":" in rel:
             return self._err("bad path", 400)
         full = os.path.join(config.WEB_DIR, "assets", rel.replace("/", os.sep))
@@ -578,6 +579,9 @@ class Handler(BaseHTTPRequestHandler):
 
         # ---- 兼容模式：serveo 等公网隧道会把 SSE 掐断，前端收不到 token ----
         # recover=从已生成结果里取回（不再跑一遍，避免重复执行工具）；否则正常跑一遍聚合成 JSON。
+        # 同一会话若已有正在进行的请求，拒绝新请求（避免 Runner 互相覆盖/互相干扰）
+        if ACTIVE.get(sid) is not None:
+            return self._err("该会话正在处理中，请稍候", 409)
         if not body.get("stream", True):
             if body.get("recover") and sid in _LAST_REPLY:
                 r = _LAST_REPLY[sid]
@@ -713,10 +717,12 @@ class LumonHTTPServer(ThreadingHTTPServer):
 
 
 def serve(port: int | None = None) -> ThreadingHTTPServer:
-    # 开机即启动「全网知识自动吸收」（后台非阻塞，不影响对话）
+    # 开机即启动「全网知识实时吸收」（后台非阻塞，不影响对话；关闭时一并停止）
     try:
+        import atexit
         from . import knowledge
         knowledge.start()
+        atexit.register(knowledge.stop)
     except Exception:
         pass
     st = config.settings()

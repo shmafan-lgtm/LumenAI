@@ -624,7 +624,11 @@ def _infer_call_from_reasoning(reasoning: str) -> list[dict]:
                 if mq:
                     pat = mq.group(1).strip()
             if pat:
-                calls.append({"name": "fs_grep", "args": {"pattern": pat, "path": p or "."}})
+                # 注意：fs_grep 分支里没有像 fs_read 那样先算过 `p`，
+                # 必须从 seg 里现取路径，否则会抛 UnboundLocalError 把整轮带崩。
+                gp = rel_path(path_after(seg))
+                calls.append({"name": "fs_grep",
+                              "args": {"pattern": pat, "path": gp or "."}})
         elif nm in ("fs_ls", "fs_read", "fs_write", "fs_append"):
             raw_path = path_after(seg)
             p = rel_path(raw_path)
@@ -1133,7 +1137,7 @@ class Runner:
         # 6 步能拖到 18 分钟 —— 用户等不起，卡住了也要给个交代。
         wall_limit = float(ag.get("wall_limit_secs", 420) or 420)
 
-        while step <= max_steps:
+        while step < max_steps:
             step += 1
             if time.time() - t_start > wall_limit:
                 self.emit({"type": "status",

@@ -1,0 +1,80 @@
+{
+  "generated_at": "20261108_121023",
+  "tasks": [
+    {
+      "name": "写作A1: 线程安全LRU缓存",
+      "pass": true,
+      "compiled_ok": true,
+      "thread_safe_hint": true,
+      "expected_all_present": true,
+      "output": "lru_submit.cpp\r\n\n--- RUN ---\nG1=1\r\nG2=-1\r\nG3=3\r\nG1b=-1\r\nG3b=3\r\n",
+      "model_response_len": 1439
+    },
+    {
+      "name": "写作A2: 健壮safe_atoi",
+      "pass": false,
+      "compiled_ok": true,
+      "expected_all_present": false,
+      "output": "atoi_submit.cpp\r\n\n--- RUN ---\n[42] ok=1 v=42\r\n[   -123] ok=0 v=0\r\n[999999999999999999999] ok=0 v=0\r\n[0] ok=1 v=0\r\n[   +7abc] ok=1 v=7\r\n[abc] ok=0 v=0\r\n[] ok=0 v=0\r\n[2147483647] ok=1 v=2147483647\r\n",
+      "model_response_len": 1543
+    },
+    {
+      "name": "深层bug: 检测+修复(5个)",
+      "pass": false,
+      "details": [
+        {
+          "name": "bug1_sign.cpp",
+          "pass": true,
+          "detected": true,
+          "fixed_compiled_ok": true,
+          "expect": "RESULT: LESS",
+          "output": "bug1_sign_fixed.cpp\r\n\n--- RUN ---\nRESULT: LESS\r\n",
+          "model_response_len": 706
+        },
+        {
+          "name": "bug2_overflow.cpp",
+          "pass": true,
+          "detected": true,
+          "fixed_compiled_ok": true,
+          "expect": "RESULT: 5000000000",
+          "output": "bug2_overflow_fixed.cpp\r\n\n--- RUN ---\nRESULT: 5000000000\r\n",
+          "model_response_len": 763
+        },
+        {
+          "name": "bug3_erase.cpp",
+          "pass": true,
+          "detected": true,
+          "fixed_compiled_ok": true,
+          "expect": "RESULT: 3",
+          "output": "bug3_erase_fixed.cpp\r\n\n--- RUN ---\nRESULT: 3\r\n",
+          "model_response_len": 1057
+        },
+        {
+          "name": "bug4_float.cpp",
+          "pass": false,
+          "detected": false,
+          "fixed_compiled_ok": false,
+          "expect": "RESULT: 100000.0",
+          "output": "未能从模型响应中解析出修复代码",
+          "model_response_len": 0
+        },
+        {
+          "name": "bug5_abs.cpp",
+          "pass": true,
+          "detected": true,
+          "fixed_compiled_ok": true,
+          "expect": "RESULT: OVERFLOW",
+          "output": "bug5_abs_fixed.cpp\r\n\n--- RUN ---\nRESULT: OVERFLOW\r\n",
+          "model_response_len": 885
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "write_lru_pass": true,
+    "write_atoi_pass": false,
+    "deepbug_all_pass": false,
+    "deepbug_fixed_count": 4,
+    "deepbug_detected_count": 4
+  }
+}

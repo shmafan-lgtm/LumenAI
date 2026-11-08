@@ -470,7 +470,8 @@ def main() -> int:
     base = None
     if args.base and os.path.isfile(args.base):
         with open(args.base, "r", encoding="utf-8") as f:
-            base = json.load(f).get("summary") or json.load(f)
+            _d = json.load(f)
+        base = _d.get("summary") or _d
     code, fails = gate(s, base)
 
     print("\n===== 回归闸口结果 =====")

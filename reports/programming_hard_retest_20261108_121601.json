@@ -1,0 +1,6 @@
+{
+  "atoi_v2_pass": true,
+  "atoi_v2_output": "atoi_v2.cpp\r\n\n--- RUN ---\n[42] ok=1 v=42\r\n[   -123] ok=1 v=-123\r\n[999999999999999999999] ok=0 v=0\r\n[0] ok=1 v=0\r\n[   +7abc] ok=1 v=7\r\n[abc] ok=0 v=0\r\n[] ok=0 v=0\r\n[2147483647] ok=1 v=2147483647\r\n",
+  "bug4_float_pass": true,
+  "bug4_float_output": "bug4_float_fixed2.cpp\r\n\n--- RUN ---\nRESULT: 100000.0\r\n"
+}

@@ -156,7 +156,8 @@ def main() -> int:
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, CANONICAL_NAME)
 
-    if os.path.exists(out_path) and os.path.getsize(out_path) == EXPECTED_SIZE:
+    if (os.path.exists(out_path) and os.path.getsize(out_path) == EXPECTED_SIZE
+            and os.path.exists(out_path + ".done")):
         print(f"[skip] 已完整存在：{out_path}")
         return 0
 
@@ -188,7 +189,7 @@ def main() -> int:
         with lock:
             state["n"] += 1
             done_chunks = state["n"]
-            written["n"] += chunk_size if ok else 0
+            written["n"] += (end - start + 1) if ok else 0
         elapsed = max(time.time() - t0, 0.001)
         pct = 100.0 * done_chunks / nchunks
         speed = (done_chunks * chunk_size) / elapsed / (1024 * 1024)
@@ -214,6 +215,12 @@ def main() -> int:
         log("[error] 下载内容不完整（可能是签名过期或网络中断），重跑本命令即可重下。")
         return 1
     log(f"[done] 权重就位：{out_path}")
+    # 标记下载完成，供下次 skip 判断（避免把上次失败留下的全零稀疏文件误判为完整）
+    try:
+        with open(out_path + ".done", "w", encoding="utf-8") as _d:
+            _d.write("ok")
+    except Exception:
+        pass
     log("[next] 重启 Lumen，模型选择里选 gpt-oss-20b (H1)；"
         "显存不足时会自动卸载到内存(RAM) 运行。")
     return 0

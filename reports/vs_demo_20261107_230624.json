@@ -1,0 +1,25 @@
+{
+  "design_len": 2676,
+  "programs": [
+    {
+      "file": "sieve.cpp",
+      "compiled": true,
+      "output": "sieve.cpp\r\n\n--- RUN ---\n   2   3   5   7  11  13  17  19  23  29\r\n  31  37  41  43  47  53  59  61  67  71\r\n  73  79  83  89  97 101 103 107 109 113\r\n 127 131 137 139 149 151 157 163 167 173\r\n 179 181 191 193 197 199\r\n"
+    },
+    {
+      "file": "filecount.cpp",
+      "compiled": true,
+      "output": "filecount.cpp\r\nC:\\Users\\Administrator\\WorkBuddy\\2026-10-27-13-06-30\\Lumen\\workspace\\vs_demo\\filecount.cpp(1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失\r\n\n--- RUN ---\nUsage: filecount <file_path>\r\n",
+      "run_with_arg": "琛屾暟: 6\r\n鍗曡瘝鏁? 18\r\n瀛楃�︽暟锛堝惈鎹㈣�岋級: 243\r\n"
+    },
+    {
+      "file": "caesar.cpp",
+      "compiled": true,
+      "output": "caesar.cpp\r\nC:\\Users\\Administrator\\WorkBuddy\\2026-10-27-13-06-30\\Lumen\\workspace\\vs_demo\\caesar.cpp(1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失\r\n\n--- RUN ---\n瀵嗘枃: Khoor, Oxphq!\r\n瑙ｅ瘑鍚? Hello, Lumen!\r\n楠岃瘉閫氳繃锛氬姞瀵嗕笌瑙ｅ瘑涓�鑷淬�俓n"
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "compiled": 3
+  }
+}

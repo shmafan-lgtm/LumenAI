@@ -119,6 +119,12 @@ class Tunnel:
                 break
         # 后台持续消费 stdout，避免管道写满把 ssh 堵死
         threading.Thread(target=self._drain, daemon=True).start()
+        # 没拿到隧道 URL 却留下了 ssh 进程 → 主动清理，避免进程泄漏
+        if not self.url and self.proc and self.proc.poll() is None:
+            try:
+                self.proc.terminate()
+            except Exception:
+                pass
         return self.url
 
     def _drain(self) -> None:

@@ -133,6 +133,7 @@ def write_runtime(port: int) -> None:
                 "port": port,
                 "url": f"http://127.0.0.1:{port}/",
                 "started": time.time(),
+                "clean_exit": False,
                 "exe": config.ROOT,
             }, f, ensure_ascii=False, indent=2)
     except Exception:

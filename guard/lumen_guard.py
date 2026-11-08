@@ -212,6 +212,20 @@ class Guard:
     def start_lumen(self, by: str = "guard") -> dict:
         if lumen_running():
             return {"ok": True, "already": True, "pid": runtime().get("pid")}
+        # 清理可能残留的旧 Lumen 进程（仅限 runtime.json 中记录的自身 pid），
+        # 否则僵死实例占着 8770 会让新进程绑定失败、陷入重启风暴。
+        # 严格只作用于 Lumen 自己的进程，绝不触碰其它进程。
+        old_pid = int(runtime().get("pid", 0) or 0)
+        if old_pid and old_pid != os.getpid() and pid_alive(old_pid):
+            try:
+                k = ctypes.windll.kernel32
+                h = k.OpenProcess(0x0001, False, old_pid)
+                if h:
+                    k.TerminateProcess(h, 0)
+                    k.CloseHandle(h)
+                    time.sleep(0.5)
+            except Exception:
+                pass
         cmd = find_lumen_exe()
         if not cmd:
             return {"ok": False, "error": "找不到 Lumen.exe / main.py"}

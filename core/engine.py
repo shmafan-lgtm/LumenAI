@@ -243,7 +243,7 @@ def stream_chat(messages: list[dict], **kw) -> Iterator[dict]:
         if lc.get("running"):
             yield from _stream_openai(
                 lc["base_url"],
-                kw.get("model") or "local",
+                kw.get("model") or lc.get("model") or "local",
                 messages,
                 temperature=kw.get("temperature", 0.6),
                 max_tokens=kw.get("max_tokens", 2048),
@@ -269,7 +269,7 @@ def stream_chat(messages: list[dict], **kw) -> Iterator[dict]:
                 if lc.get("running"):
                     yield from _stream_openai(
                         lc["base_url"],
-                        kw.get("model") or "local",
+                        kw.get("model") or lc.get("model") or "local",
                         messages,
                         temperature=kw.get("temperature", 0.6),
                         max_tokens=kw.get("max_tokens", 2048),
