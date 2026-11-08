@@ -24,7 +24,13 @@ XZ_SIZE_LIMIT = 50 * 1024 * 1024  # jsDelivr 等免费 CDN 单文件上限
 
 
 def _ensure_xz():
-    if os.path.isfile(XZ_DST) and os.path.getsize(XZ_DST) > 1024 * 1024:
+    # 只要 zip 载荷比旧 xz 新，就强制重压。
+    # 踩过的坑：改了客户端(如开机动画)却一直复用上次的 xz，装完还是旧界面。
+    zip_newer = (os.path.isfile(ZIP_SRC) and
+                 (not os.path.isfile(XZ_DST) or
+                  os.path.getmtime(ZIP_SRC) > os.path.getmtime(XZ_DST)))
+    if (os.path.isfile(XZ_DST) and os.path.getsize(XZ_DST) > 1024 * 1024
+            and not zip_newer):
         return XZ_DST
     import io
     import zipfile

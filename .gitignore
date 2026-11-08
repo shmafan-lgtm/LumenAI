@@ -77,3 +77,6 @@ payload_service/__pycache__/
 
 # 构建时把旧产物"搬家"暂存的目录（避开批量删除护栏，不入库）
 _trash/
+
+# 废弃的开机视频存档(已改为纯CSS/SVG动画, 保留备用不入库)
+boot-anim/lumen-boot-OLD-unused.mp4
