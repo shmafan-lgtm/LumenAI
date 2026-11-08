@@ -17,7 +17,7 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import agent, auth, config, engine, firewall, hardware, llamacpp, metrics, models, remote, screencap_service, search, store, weights
+from . import agent, auth, config, engine, firewall, hardware, knowledge, llamacpp, metrics, models, remote, screencap_service, search, store, weights
 
 APP_NAME = "Lumen"
 VERSION = "1.0.0"
@@ -120,6 +120,11 @@ class Handler(BaseHTTPRequestHandler):
 
             if path == "/api/bootstrap":
                 return self._json(self._bootstrap(who))
+
+            if path == "/api/knowledge/status":
+                # 实时知识库状态：条数 / 是否运行 / 信源数 / 刷新节拍 / 最近吸收时间
+                # 供界面与模型查询，避免"问它有没有更新却答不知道"
+                return self._json({"ok": True, **knowledge.status()})
 
             if path == "/api/tiers":
                 hw = hardware.refresh()

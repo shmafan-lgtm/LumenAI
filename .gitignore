@@ -80,3 +80,6 @@ _trash/
 
 # 废弃的开机视频存档(已改为纯CSS/SVG动画, 保留备用不入库)
 boot-anim/lumen-boot-OLD-unused.mp4
+
+# 知识库清理临时备份
+data/knowledge_base.json.bak*

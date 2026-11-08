@@ -190,16 +190,33 @@ _JUNK_RE = re.compile("|".join(re.escape(w) for w in _JUNK_WORDS))
 _QUALITY_RE = re.compile("|".join(re.escape(w) for w in _QUALITY_WORDS), re.IGNORECASE)
 
 
+# 宣传/口号体：这类标题是意识形态宣传稿而非可核查的知识，按"精挑高质量、垃圾放掉"丢弃。
+# 只匹配明显的栏目标签与口号句式，避免误伤正常新闻（有具体事实/数据的不在此列）。
+_PROPAGANDA_RE = re.compile(
+    r"^(学习卡|学习手记|镜观|足迹|天天学习|第一观察|时政微观察|理响中国|"
+    r"近平日历|平语近人|央视快评|央视网评|人民网评|新华时评|求是网评论|"
+    r"评论员观察|一线调研|奋进|踔厉|笃行|擘画|绘就|谱写|"
+    r"心怀\s*[\"“]|不负\s*[\"“]|情系|殷殷|殷切|寄语|嘱托)|"
+    r"[|｜丨]\s*(学习|足迹|镜观|感悟|嘱托)|"
+    r"(白皮书式口号|伟大征程|宏伟蓝图|凝心聚力|砥砺前行|"
+    r"踔厉奋发|勇毅前行|咬定青山|绿水青山就是|人不负青山)",
+)
+
+
 def _is_junk(title: str, snippet: str) -> bool:
-    """判断一条要不要丢。命中垃圾词、标题过短、或标题过度标点（标题党）即丢。"""
+    """判断一条要不要丢。命中垃圾词、宣传口号体、标题过短、或标题过度标点（标题党）即丢。"""
     t = (title or "").strip()
     s = (snippet or "").strip()
     if len(t) < 4:                       # 标题太短，无信息量
         return True
-    blob = t + " " + s
-    if _JUNK_RE.search(blob):             # 命中垃圾词
+    # 垃圾词只查「标题」：营销/引流特征都体现在标题上。若把正文摘要也算进来，
+    # "搜索和广告业务营收"「散落在群和私聊里」这类正常科技新闻会被 "广告"/"私聊"
+    # 误杀。实测踩过这个坑，故明确只用标题判定。
+    if _JUNK_RE.search(t):
         return True
     if re.search(r"[!！?？]{3,}", t):     # 标题堆感叹/问号，典型标题党
+        return True
+    if _PROPAGANDA_RE.search(t):          # 宣传/口号体，非可核查知识
         return True
     return False
 
