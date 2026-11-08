@@ -848,6 +848,19 @@ class TagFilter:
 NEEDS_FRESH = re.compile(
     r"(最新|现在|今天|昨天|本周|今年|目前|多少钱|价格|股价|发布|版本|更新|新闻|赛况|天气|上市|融资|当选|辞职|去世|多少|几点|汇率|排名)"
 )
+# 疑问句识别：用户把事实类问题写成陈述句时，量化模型常「自信答错」，
+# 必须主动联网检索兜底。这里把明确的疑问形态都算作需要检索——
+# 显式问号、句末「吗/呢」、以及谁/什么/怎么/为什么/哪… 等疑问词。
+INTERROGATIVE = re.compile(
+    r"(？|\?"                                   # 显式问号（含用户手敲的 ?）
+    r"|吗\s*$|呢\s*$|啊\s*$|吧\s*$"              # 句末疑问/揣测语气词
+    r"|为什么|为何|怎么|怎样|如何|咋"              # how / why
+    r"|哪[里个些种位年月度天人处边面]|几[个种位天年月次]"  # which / how many
+    r"|是多少|是谁|是什么|是不是|是否|能否|可不可以|可曾"  # yes-no 疑问
+    r"|谁|什么|哪个|啥"                          # 纯疑问代词（陈述句极少出现）
+    r"|\b(who|what|when|where|why|how|which)\b)",  # 英文 wh- 疑问词
+    re.I,
+)
 HEDGE = re.compile(r"(我不确定|不确定|无法确认|据我所知|截至我|我的知识|可能已经|建议你自行核实|不确定是否)")
 
 # 关于 Lumen 自身身份的问题：答案就在系统提示词里，检索只会召回
@@ -890,7 +903,12 @@ def is_workspace_task(text: str) -> bool:
 def heuristic_search(user_text: str, answer: str) -> bool:
     if is_identity_question(user_text):
         return False
-    if NEEDS_FRESH.search(user_text or "") and len(user_text) < 200:
+    # 疑问句或含时效性词 → 直接联网检索（默认 low_confidence 模式下这是
+    # 唯一的「主动检索」入口；之前只认时效性词，导致事实类疑问被自信答错）。
+    if len(user_text) < 200 and (
+        NEEDS_FRESH.search(user_text or "")
+        or INTERROGATIVE.search(user_text or "")
+    ):
         return True
     return bool(HEDGE.search(answer or ""))
 
@@ -1340,6 +1358,31 @@ class Runner:
                     # 兜底文案是这轮新生成的，前面没有随 token 推出去过 ——
                     # 不补一次 emit，前端只会看到一个空白回答。
                     self.emit({"type": "token", "text": final_text})
+                # —— 把握度过低：坦诚拒答，绝不编造 ——
+                # 用户要求：模型自报把握度低于 refuse_threshold（默认 10%）时，
+                # 直接告诉用户「不会 / 没把握」，而不是用记忆碎片硬凑一个错答案。
+                refuse_threshold = int(se.get("refuse_threshold", 10))
+                if search_on and conf is not None and conf < refuse_threshold and final_text.strip():
+                    final_text = (
+                        f"（把握度 {conf}%，过低）这个问题我目前没有足够可靠的把握，不会替你瞎猜。\n"
+                        f"[由是想念也是麻烦设定，把握度低于10%就回答不会，不像其他AI那样瞎编]"
+                    )
+                    self.emit({"type": "token", "text": final_text})
+                    self.emit({
+                        "type": "done",
+                        "sources": sources,
+                        "confidence": conf,
+                        "refused": True,
+                        "tools": used_tools,
+                        "engine": "model",
+                    })
+                    store.add_message(
+                        session_id, "assistant", final_text,
+                        {"sources": sources, "confidence": conf, "refused": True,
+                         "tools": used_tools, "model": eng_status.get("model"),
+                         "reasoning": self.reasoning.strip()},
+                    )
+                    return
                 self.emit({
                     "type": "done",
                     "sources": sources,

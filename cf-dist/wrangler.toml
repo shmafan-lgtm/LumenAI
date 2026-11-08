@@ -1,0 +1,8 @@
+name = "lumen-weights"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# 绑定一个 R2 存储桶（免费额度：10 GB 存储 / 1000 万次 A 类请求 / 100 万次 B 类请求 / 月）
+[[r2_buckets]]
+binding = "LUMEN_WEIGHTS"
+bucket_name = "lumen-weights"

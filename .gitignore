@@ -60,3 +60,17 @@ desktop.ini
 
 # ---- 隧道运行时产物（每次重建都会变，且含本机路径/地址）----
 tools/puburl.txt
+
+# 国内下载站产物（大文件，不入库）
+download_site/
+
+# 受控分发后端：只入库源码，产物不入库
+payload_service/core_parts/
+payload_service/Lumen-Setup.exe
+
+# 安装器构建中间产物（由 Lumen-Portable.zip 经 xz 重压生成，见 build 说明）
+installer/payload/
+
+# 后端对外提供的安装器成品（部署时从 dist_setup 复制，不入库）
+payload_service/Lumen-Setup.exe
+payload_service/__pycache__/

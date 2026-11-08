@@ -507,9 +507,75 @@ class Handler(BaseHTTPRequestHandler):
         if not os.path.isfile(full):
             return self._err("not found", 404)
         ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
-        with open(full, "rb") as f:
-            data = f.read()
-        self._send(200, data, ctype, {"Cache-Control": "public, max-age=3600"})
+        try:
+            size = os.path.getsize(full)
+        except OSError:
+            return self._err("not found", 404)
+
+        # 音视频必须支持 Range（206 Partial Content）：
+        # Edge/Chromium 的 <video> 对不支持 Range 的源会拒绝增量播放，
+        # 导致开机视频只有黑屏、直到前端超时兜底才露出界面。
+        rng = self.headers.get("Range") or ""
+        m = re.match(r"bytes=(\d*)-(\d*)", rng.strip())
+        if m and size > 0:
+            g0, g1 = m.group(1), m.group(2)
+            if g0 == "" and g1 == "":
+                return self._err("bad range", 416)
+            if g0 == "":                      # bytes=-N  取末尾 N 字节
+                length = min(int(g1), size)
+                start = size - length
+                end = size - 1
+            else:
+                start = int(g0)
+                end = int(g1) if g1 else size - 1
+                if end >= size:
+                    end = size - 1
+            if start > end or start >= size:
+                self.send_response(416)
+                self.send_header("Content-Range", "bytes */%d" % size)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            length = end - start + 1
+            self.send_response(206)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(length))
+            self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, size))
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            try:
+                with open(full, "rb") as f:
+                    f.seek(start)
+                    remaining = length
+                    while remaining > 0:
+                        chunk = f.read(min(262144, remaining))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        remaining -= len(chunk)
+            except Exception:
+                pass
+            return
+
+        # 普通文件：流式输出，避免大文件一次性读进内存
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(size))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Cache-Control", "public, max-age=3600")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        try:
+            with open(full, "rb") as f:
+                while True:
+                    chunk = f.read(262144)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------ 登录
     def _login(self, body: dict):
