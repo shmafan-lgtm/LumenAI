@@ -17,7 +17,7 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import agent, auth, config, engine, firewall, hardware, knowledge, llamacpp, metrics, models, remote, screencap_service, search, store, weights
+from . import agent, auth, config, engine, firewall, hardware, knowledge, llamacpp, memory, metrics, models, remote, screencap_service, search, store, weights
 
 APP_NAME = "Lumen"
 VERSION = "1.0.0"
@@ -125,6 +125,10 @@ class Handler(BaseHTTPRequestHandler):
                 # 实时知识库状态：条数 / 是否运行 / 信源数 / 刷新节拍 / 最近吸收时间
                 # 供界面与模型查询，避免"问它有没有更新却答不知道"
                 return self._json({"ok": True, **knowledge.status()})
+
+            if path == "/api/memory/status":
+                # 跨会话记忆状态：16k 水位 / 已换会话次数 / 长期事实数 / 提示文案
+                return self._json(memory.memory_status())
 
             if path == "/api/tiers":
                 hw = hardware.refresh()
@@ -644,6 +648,29 @@ class Handler(BaseHTTPRequestHandler):
             sess = store.create_session(text[:24] or "新对话", config.settings().get("tier", "h1"))
             sid = sess["id"]
 
+        # ---- 16k 上下文自动续接：用量将满时，先把旧会话压成记忆、换到新会话 ----
+        # 关键：必须给前端发 handoff 事件显式告知，绝不能静默跳转（用户明确要求）。
+        from . import memory as _memory
+        handoff_ev = None
+        try:
+            if _memory.should_handoff(sess["messages"], text) and len(sess["messages"]) >= 4:
+                old_sid = sid
+                mem = _memory.handoff(sess)                  # 固化记忆到 kv
+                new_title = "续：" + (sess.get("title") or "新对话")[:20]
+                sess = store.create_session(new_title, config.settings().get("tier", "h1"))
+                sid = sess["id"]
+                handoff_ev = {
+                    "type": "handoff",
+                    "session_id": sid,
+                    "from_session_id": old_sid,
+                    "notice": _memory.HANDOFF_NOTICE,
+                    "count": mem.get("count", 1),
+                }
+                config.log("chat.log", f"handoff {old_sid} -> {sid} (mem#{mem.get('count')})")
+        except Exception as e:
+            config.log("error.log", f"handoff skipped: {type(e).__name__} {e}")
+            handoff_ev = None
+
         history = [{"role": m["role"], "content": m["content"]} for m in sess["messages"][-16:]]
         store.add_message(sid, "user", text, {"device": (who or {}).get("device_name", "本机")})
         store.touch_title(sid, text)
@@ -659,7 +686,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True, "session_id": sid, "recovered": True,
                                    "reply": r.get("reply", ""), "reasoning": r.get("reasoning", ""),
                                    "sources": r.get("sources", [])})
-            return self._chat_collect(sid, text, history)
+            return self._chat_collect(sid, text, history, handoff_ev)
 
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -687,6 +714,11 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
+        # 自动换会话：在正式回复前先发 handoff，前端据此显示醒目提示条并切到新会话。
+        # 必须排在任何 token 之前，否则用户会先看到回复才看到"已跳转"，容易误以为突然跳。
+        if handoff_ev:
+            emit(handoff_ev)
+
         runner = agent.Runner(emit)
         with _active_lock:
             ACTIVE[sid] = runner
@@ -709,7 +741,7 @@ class Handler(BaseHTTPRequestHandler):
                 pass
             config.log("chat.log", f"sid={sid} took={time.time()-t0:.1f}s len={len(text)}")
 
-    def _chat_collect(self, sid: str, text: str, history: list):
+    def _chat_collect(self, sid: str, text: str, history: list, handoff_ev: dict | None = None):
         """非流式：跑一遍，把结果聚合成单个 JSON 返回（供不支持 SSE 的隧道使用）。"""
         acc = {"reply": "", "reasoning": "", "sources": []}
 
@@ -735,8 +767,11 @@ class Handler(BaseHTTPRequestHandler):
                 ACTIVE.pop(sid, None)
             _LAST_REPLY[sid] = dict(acc)
             config.log("chat.log", f"sid={sid} collect took={time.time()-t0:.1f}s")
-        self._json({"ok": True, "session_id": sid, "reply": acc["reply"],
-                    "reasoning": acc["reasoning"], "sources": acc["sources"]})
+        out = {"ok": True, "session_id": sid, "reply": acc["reply"],
+               "reasoning": acc["reasoning"], "sources": acc["sources"]}
+        if handoff_ev:
+            out["handoff"] = handoff_ev
+        self._json(out)
 
 
 # ---------------------------------------------------------------- Guard IPC

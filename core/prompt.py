@@ -78,7 +78,7 @@ def tool_result_message(name: str, payload: dict) -> str:
 
 
 def system_prompt(tier: dict, st: dict, ws: str, runtime_model: str = "",
-                  runtime_backend: str = "") -> str:
+                  runtime_backend: str = "", memory_block: str = "") -> str:
     hw = hardware.probes()
     se = st.get("search") or {}
     agent_on = (st.get("agent") or {}).get("enabled", True)
@@ -187,6 +187,11 @@ def system_prompt(tier: dict, st: dict, ws: str, runtime_model: str = "",
 
     # 「编程专家」内置插件：无条件注入系统提示，没有任何配置开关可以关闭它。
     parts.append(programming_expert_block())
+
+    # 「跨会话记忆」：16k 上下文用完自动换新对话后注入，让新窗口能接着上次聊。
+    # 只在真的有记忆时才加段落，避免平白占用宝贵的 16k 窗口。
+    if memory_block:
+        parts += ["", memory_block]
 
     parts = [p for p in parts if p != ""]
 

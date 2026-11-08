@@ -1048,8 +1048,15 @@ class Runner:
         tier, fallback_reason = models.effective_tier(st.get("tier", "h1"), runtime_model, runtime_backend)
         if fallback_reason:
             self.emit({"type": "status", "text": fallback_reason})
+        # 跨会话记忆：16k 用完后自动新开的会话会带上之前压缩的记忆，能接着聊。
+        try:
+            from . import memory as _memory
+            _mem_block = _memory.memory_block()
+        except Exception:
+            _mem_block = ""
         sys_msg = {"role": "system",
-                   "content": prompt.system_prompt(tier, st, ws, runtime_model, runtime_backend)}
+                   "content": prompt.system_prompt(tier, st, ws, runtime_model, runtime_backend,
+                                                   memory_block=_mem_block)}
         convo = [sys_msg] + prompt.trim_history(history, 20000)
         # 需要动工具时，插一段 assistant 侧示范当对话历史用——3B 权重对
         # 「assistant 说过什么」的模仿远比对系统提示词里的说明可靠，

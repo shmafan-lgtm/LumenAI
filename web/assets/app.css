@@ -380,3 +380,24 @@ select option{background:#12151b}
 .dlbar i{display:block;height:100%;background:linear-gradient(90deg,var(--teal),var(--gold));transition:width .3s ease}
 
 /* reasoning 模型的思考过程块 */
+
+/* ---- 16k 上下文用完、自动跳转新对话的常驻提示条 ---- */
+.handoff-notice{
+  display:flex;align-items:flex-start;gap:12px;
+  max-width:820px;margin:0 auto 6px;padding:13px 15px;
+  background:linear-gradient(180deg,rgba(127,166,255,.14),rgba(127,166,255,.07));
+  border:1px solid rgba(127,166,255,.38);border-left:3px solid var(--blue);
+  border-radius:12px;color:var(--txt);animation:rise .4s ease both;
+  box-shadow:0 6px 22px rgba(0,0,0,.28);
+}
+.handoff-notice .hn-ico{width:20px;height:20px;flex:0 0 20px;color:var(--blue);margin-top:1px}
+.handoff-notice .hn-ico svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.handoff-notice .hn-body{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0}
+.handoff-notice .hn-body b{font-size:12px;letter-spacing:.04em;color:var(--blue)}
+.handoff-notice .hn-body span{font-size:13.5px;line-height:1.65;color:var(--txt)}
+.handoff-notice .hn-x{
+  flex:0 0 auto;width:22px;height:22px;line-height:20px;text-align:center;
+  border:1px solid var(--line-2);border-radius:7px;background:none;color:var(--txt-2);
+  font-size:16px;cursor:pointer;transition:.15s;
+}
+.handoff-notice .hn-x:hover{border-color:var(--blue);color:var(--txt)}

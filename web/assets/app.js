@@ -17,7 +17,7 @@ const S = {
   sessions: [], cur: null, messages: [], settings: {}, tiers: [], hw: {}, engine: {},
   account: {}, devices: [], lan: {}, streaming: false, ctrl: null,
   remote: {}, drawer: null, tab: 'settings', modal: null, approvalsShown: new Set(),
-  model: 'h1', seenSeq: 0, pendingSources: null,
+  model: 'h1', seenSeq: 0, pendingSources: null, handoffNotice: '',
 };
 
 /* ------------------------------------------------------------------ api */
@@ -42,6 +42,20 @@ function toast(msg, kind = '') {
   $('#toastRoot').appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateY(6px)'; el.style.transition = '.25s'; }, 2600);
   setTimeout(() => el.remove(), 3000);
+}
+
+/* 16k 上下文用完、自动跳转新对话时的常驻提示条。
+   刻意做成"消息流里的一条系统提示"而不是 3 秒 toast：
+   用户明确要求不能让人误以为"突然跳转"，要像 GPT 那样写清楚发生了什么。 */
+function showHandoffNotice(text) {
+  try {
+    S.handoffNotice = text || '';      // 常驻状态，renderThread 重绘时会补回
+    renderHandoffNotice(S.handoffNotice);
+    const stage = $('#stage');
+    if (stage) stage.scrollTop = 0;    // 跳到顶部让用户一眼看到发生了什么
+    // 同时给一个轻量 toast，确保即使消息区在别的视图也能立刻注意到
+    toast('已自动开启新对话，之前的对话已记住', 'ok');
+  } catch (e) { /* 提示条失败不能影响对话本身 */ }
 }
 
 /* ------------------------------------------------------------- markdown */
@@ -299,7 +313,29 @@ function renderThread() {
     const box2 = h.parentElement;
     if (box2) box2.classList.toggle('open');
   }));
+  // renderThread 会整体重建 #thread，故这里把"自动跳转"提示条补回去，实现常驻。
+  if (S.handoffNotice) renderHandoffNotice(S.handoffNotice);
   scrollBottom(true);
+}
+
+/* 把常驻提示条渲染进 #thread（由 renderThread 每次重建时调用，避免被冲掉）。 */
+function renderHandoffNotice(text) {
+  const thread = $('#thread');
+  if (!thread) return;
+  const old = thread.querySelector('.handoff-notice');
+  if (old) old.remove();
+  const box = document.createElement('div');
+  box.className = 'handoff-notice';
+  box.innerHTML =
+    '<div class="hn-ico"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/>' +
+    '<path d="M12 7v6l4 2"/></svg></div>' +
+    '<div class="hn-body"><b>上下文续接提示</b><span>' + esc(text) + '</span></div>' +
+    '<button class="hn-x" title="知道了">×</button>';
+  box.querySelector('.hn-x').addEventListener('click', () => {
+    S.handoffNotice = '';   // 用户点关闭后不再常驻
+    box.remove();
+  });
+  thread.insertBefore(box, thread.firstChild);
 }
 
 function scrollBottom(force) {
@@ -319,6 +355,7 @@ async function loadSessions() {
 async function openSession(id) {
   const s = await api('/api/session?id=' + encodeURIComponent(id));
   S.cur = s.id;
+  S.handoffNotice = '';   // 切到别的会话 → 撤掉"自动跳转"常驻提示
   S.messages = (s.messages || []).map((m) => ({ role: m.role, content: m.content, meta: m.meta || {}, ts: m.ts }));
   renderSidebar();
   renderThread();
@@ -328,6 +365,7 @@ async function openSession(id) {
 function newChat() {
   S.cur = null;
   S.messages = [];
+  S.handoffNotice = '';   // 用户手动开新对话 → 撤掉上一条"自动跳转"常驻提示
   renderSidebar();
   renderThread();
   $('#input').focus();
@@ -420,6 +458,15 @@ async function send(text) {
         S.engine = ev.engine || S.engine;
         renderTopbar();
         break;
+      case 'handoff': {
+        // 16k 用完了：后端已把旧会话压成记忆、开了新会话并写入了本条消息。
+        // 前端切到新会话 id + 显式提示条，绝不静默跳转。
+        if (ev.session_id) S.cur = ev.session_id;
+        showHandoffNotice(ev.notice ||
+          '16k 上下文已用完，已自动跳转新对话；之前的对话我记住了，可接着聊。');
+        if (typeof loadSessions === 'function') loadSessions();
+        break;
+      }
       case 'status': {
         if (!statusEl) {
           statusEl = document.createElement('div');
