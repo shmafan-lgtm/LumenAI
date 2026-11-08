@@ -59,18 +59,23 @@ def _est_tokens(text: str) -> int:
     return cjk + (other + 3) // 4
 
 
-def estimate_usage(messages: list[dict], extra_chars: int = 0) -> int:
-    """估算当前会话已占用的上下文 token（含固定的系统/检索/知识库预留）。"""
+def estimate_usage(messages: list[dict], extra_text: str = "") -> int:
+    """估算当前会话已占用的上下文 token（含固定的系统/检索/知识库预留）。
+
+    注意单位一致性：消息内容与 extra_text 都用 _est_tokens 估算（CJK 1 字 1 token、
+    其余 4 字符 1 token），绝不能把已经是 token 的估算值再 ÷4，否则新消息的用量会被
+    虚标成 1/4，导致 16k 自动续接阈值永远达不到、handoff 永不触发。
+    """
     n = sum(_est_tokens(str(m.get("content") or "")) for m in messages)
     # 固定开销：系统提示(~6300字符)+RAG+知识库片段+打字机协议等，保守预留
     n += 4700
-    n += (extra_chars + 3) // 4
+    n += _est_tokens(extra_text)
     return n
 
 
 def should_handoff(messages: list[dict], new_message: str = "") -> bool:
     """是否该自动换新会话。"""
-    return estimate_usage(messages, _est_tokens(new_message)) >= handoff_threshold()
+    return estimate_usage(messages, new_message) >= handoff_threshold()
 
 
 # ---- 记忆摘要 -------------------------------------------------------------
@@ -127,7 +132,7 @@ def summarize_session(sess: dict) -> dict:
     }
 
 
-def merge_longterm(summary: dict) -> dict:
+def merge_longterm(summary: dict, increment_count: bool = True) -> dict:
     """把新摘要并入长期记忆，去重、限量，避免无限膨胀。"""
     lt = store.kv_get(KV_LONGTERM, {}) or {}
     facts = list(lt.get("facts") or [])
@@ -145,7 +150,7 @@ def merge_longterm(summary: dict) -> dict:
     lt.update({
         "facts": facts,
         "topics": topics,
-        "sessions_summarized": int(lt.get("sessions_summarized") or 0) + 1,
+        "sessions_summarized": int(lt.get("sessions_summarized") or 0) + (1 if increment_count else 0),
         "updated": time.time(),
     })
     store.kv_set(KV_LONGTERM, lt)
@@ -160,6 +165,33 @@ def handoff(sess: dict) -> dict:
     n = int(store.kv_get(KV_HANDOFF_COUNT, 0) or 0) + 1
     store.kv_set(KV_HANDOFF_COUNT, n)
     return {"summary": summary, "longterm": lt, "count": n}
+
+
+def note_facts(text: str) -> int:
+    """增量把用户消息里「值得记」的线索写入长期记忆——不依赖 handoff。
+
+    原设计只在 handoff（16k 用满跳转）时才把记忆固化到 kv，导致用户明明说了
+    「记住我的名字/偏好/约定/待办」，只要没触发跳转，这些就永远进不了长期记忆，
+    新会话必然「什么都不记得」。这里在每条命中风味的用户消息上立即落盘，
+    让跨会话记忆真正可用。返回新增的事实条数。
+    """
+    c = (text or "").strip()
+    if not c or c.startswith(_SKIP_PREFIX) or not _KEEP_HINT.search(c):
+        return 0
+    fact = _clean(c, 160)
+    if not fact:
+        return 0
+    summary = {
+        "title": "增量记忆",
+        "msg_count": 1,
+        "ts": time.time(),
+        "facts": [fact],
+        "intents": [],
+        "recent_questions": [],
+        "last_answer": "",
+    }
+    merge_longterm(summary, increment_count=False)
+    return 1
 
 
 # ---- 注入系统提示的记忆块 -------------------------------------------------

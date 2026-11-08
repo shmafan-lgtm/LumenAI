@@ -675,6 +675,15 @@ class Handler(BaseHTTPRequestHandler):
         store.add_message(sid, "user", text, {"device": (who or {}).get("device_name", "本机")})
         store.touch_title(sid, text)
 
+        # 增量记忆：用户明确说「记住/偏好/约定/待办…」的，立即固化到长期记忆，
+        # 不等 handoff——否则不跳转就永远记不住，跨会话记忆失效。
+        try:
+            added = _memory.note_facts(text)
+            if added:
+                config.log("chat.log", f"note_facts +{added} (sid={sid})")
+        except Exception as e:
+            config.log("error.log", f"note_facts: {type(e).__name__} {e}")
+
         # ---- 兼容模式：serveo 等公网隧道会把 SSE 掐断，前端收不到 token ----
         # recover=从已生成结果里取回（不再跑一遍，避免重复执行工具）；否则正常跑一遍聚合成 JSON。
         # 同一会话若已有正在进行的请求，拒绝新请求（避免 Runner 互相覆盖/互相干扰）

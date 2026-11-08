@@ -56,6 +56,12 @@
     "port": 8772,
     "secret": ""
   },
+  "window": {
+    "anchor": "bottom-left",
+    "width": 440,
+    "height": 760,
+    "_说明": "桌面窗口几何。anchor 支持 bottom-left(默认)/bottom-right/top-left/top-right/center；改完重启 Lumen 生效。"
+  },
   "first_run_done": false,
   "_说明": "Lumen 主配置。界面「设置」里的改动会写回这个文件；删掉它会用内置默认值重建。"
 }

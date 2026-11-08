@@ -43,6 +43,41 @@ def find_browser() -> str | None:
 _browser_proc: subprocess.Popen | None = None
 
 
+def _window_geometry() -> tuple[int, int, int, int]:
+    """返回 (x, y, w, h)。默认左下方小窗；可用 settings.window 覆盖。
+
+    anchor 支持: bottom-left(默认) | bottom-right | top-left | top-right | center
+    """
+    st: dict = {}
+    try:
+        st = (config.settings() or {}).get("window") or {}
+    except Exception:
+        st = {}
+    w = int(st.get("width", 440))
+    h = int(st.get("height", 760))
+    anchor = str(st.get("anchor", "bottom-left")).lower()
+    try:
+        import ctypes
+        sw = ctypes.windll.user32.GetSystemMetrics(0)  # SM_CXSCREEN
+        sh = ctypes.windll.user32.GetSystemMetrics(1)  # SM_CYSCREEN
+    except Exception:
+        sw, sh = 1920, 1080
+    margin = 8
+    if anchor in ("bottom-left", "bl"):
+        x, y = margin, sh - h - margin
+    elif anchor in ("bottom-right", "br"):
+        x, y = sw - w - margin, sh - h - margin
+    elif anchor in ("top-right", "tr"):
+        x, y = sw - w - margin, margin
+    elif anchor in ("center", "c"):
+        x, y = (sw - w) // 2, (sh - h) // 2
+    else:  # top-left
+        x, y = margin, margin
+    x = max(0, min(x, sw - w))
+    y = max(0, min(y, sh - h))
+    return x, y, w, h
+
+
 def open_window(url: str) -> bool:
     """用 Edge/Chrome 的 --app 模式开一个无地址栏窗口，并持有句柄：
     用户把窗口关掉，就等于退出 Lumen（写 clean_exit，守护进程不会强行拉起）。"""
@@ -52,11 +87,12 @@ def open_window(url: str) -> bool:
         return False
     profile = os.path.join(config.DATA_DIR, "browser")
     os.makedirs(profile, exist_ok=True)
+    x, y, w, h = _window_geometry()
     args = [
         exe,
         f"--app={url}",
-        "--window-size=1500,940",
-        "--window-position=120,50",
+        f"--window-size={w},{h}",
+        f"--window-position={x},{y}",
         f"--user-data-dir={profile}",
         "--no-first-run",
         "--no-default-browser-check",
