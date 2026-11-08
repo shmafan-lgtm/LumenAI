@@ -31,6 +31,7 @@
   .badges{display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap}
   .badge{font-size:12px;padding:5px 12px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--dim)}
   .badge.ok{color:#5fd39a;border-color:#26543f;background:#12261c}
+  .badge.hot{color:#8fb0ff;border-color:#2b3f66;background:#16233f}
 
   .card{
     background:linear-gradient(180deg,var(--panel) 0%,#11151d 100%);
@@ -53,12 +54,16 @@
   .dl:hover{transform:translateY(-1px)}
   .dl.ghost{
     background:transparent;border:1px solid var(--line);color:var(--fg);box-shadow:none;
-    padding:13px 20px;font-size:14px;font-weight:500;margin-left:10px;
+    padding:9px 14px;font-size:13px;font-weight:500;
   }
   .dl.ghost:hover{border-color:var(--accent)}
-  .btnrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
-  .alt{margin-top:14px;font-size:13px;color:var(--dim);line-height:1.8}
+  .btnrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .linestatus{margin-top:14px;font-size:13px;color:var(--dim);line-height:1.8}
+  .linestatus b{color:#5fd39a}
+  .alt{margin-top:8px;font-size:13px;color:var(--dim);line-height:1.8}
   .alt b{color:#b9c6de}
+  .backups{margin-top:18px;border-top:1px solid var(--line);padding-top:16px}
+  .backups .lab{font-size:13px;color:var(--dim);margin-bottom:10px}
   .note{
     margin-top:18px;font-size:13px;color:#7d879c;line-height:1.85;
     background:#10151d;border:1px solid #1e2532;border-left:3px solid var(--accent);
@@ -80,7 +85,7 @@
     <h1>Lumen AI</h1>
     <div class="sub">本地化 AI 桌面端 · 模型推理、文件读写、命令执行全部在你自己的电脑上完成</div>
     <div class="badges">
-      <span class="badge ok">官方安装器</span>
+      <span class="badge hot">国内直连 · 无需代理</span>
       <span class="badge ok">客户端已内置</span>
       <span class="badge ok">尊重系统代理</span>
       <span class="badge">Windows x64</span>
@@ -94,6 +99,7 @@
     <div class="desc">
       安装器为单文件、自包含，已把 AI 客户端程序一并压缩打包在内（约 54 MB）。
       双击后选择安装位置、勾选需要的模型档位即可，<b>无需、也不提供</b>任何单独的客户端下载。
+      下载走国内加速线路，<b>不用开代理</b>；你若本来就有代理，也照常可用。
     </div>
     <div class="meta">
       <span>大小 <b>约 54 MB</b></span>
@@ -102,18 +108,28 @@
       <span>含 <b>桌面快捷方式</b></span>
     </div>
     <div class="btnrow">
-      <a class="dl" id="dlPrimary" href="./Lumen-Setup.exe" download="Lumen-Setup.exe">⬇ 下载安装器</a>
-      <a class="dl ghost" id="dlBackup" href="https://shmafan-lgtm.github.io/LumenAI/Lumen-Setup.exe" download="Lumen-Setup.exe">备用线路</a>
+      <a class="dl" id="dlPrimary" href="https://gh-proxy.com/https://raw.githubusercontent.com/shmafan-lgtm/LumenAI/gh-pages/Lumen-Setup.exe" download="Lumen-Setup.exe">⬇ 下载安装器（国内直连）</a>
     </div>
+    <div class="linestatus" id="lineStatus">正在为你选择最快的国内线路…</div>
     <div class="alt">
       只有一个下载入口：安装器。<b>AI 客户端已镶在安装器内部，站点不提供也无法单独下载客户端。</b>
-      安装器下载模型与组件时会沿用你的系统 / 代理设置，<b>不会禁用代理</b>——公司网络、代理、加速器环境下都能正常下载。
+      安装器下载模型与组件时会沿用你的系统 / 代理设置，<b>不会禁用代理</b>。
     </div>
+
+    <div class="backups">
+      <div class="lab">主按钮没反应或下载失败？换一条线路试试：</div>
+      <div class="btnrow">
+        <a class="dl ghost" data-line="2" href="https://v6.gh-proxy.org/https://raw.githubusercontent.com/shmafan-lgtm/LumenAI/gh-pages/Lumen-Setup.exe" download="Lumen-Setup.exe">国内线路 ②</a>
+        <a class="dl ghost" data-line="3" href="https://ghproxy.net/https://raw.githubusercontent.com/shmafan-lgtm/LumenAI/gh-pages/Lumen-Setup.exe" download="Lumen-Setup.exe">国内线路 ③</a>
+        <a class="dl ghost" data-line="4" href="https://shmafan-lgtm.github.io/LumenAI/Lumen-Setup.exe" download="Lumen-Setup.exe">官方页（可能需代理）</a>
+      </div>
+    </div>
+
     <div class="note">
       下载后双击运行。Windows 若弹出「已保护你的电脑」，点<b>更多信息 → 仍要运行</b>。<br>
-      <b>若点击后没反应 / 下载很慢 / 失败</b>：① 点右侧「备用线路」；② 右键按钮选「链接另存为」；
-      ③ 本文件托管在 GitHub Pages（约 54 MB），部分地区访问较慢，可开代理 / 加速器、换网络或稍后重试，浏览器支持断点续传。
-      安装器会在本机解包内置程序（约 160 MB），请预留足够空间。
+      国内线路为公共加速服务，个别地区偶有波动；所有线路都支持<b>断点续传</b>，
+      下载中断后重新点一次通常会从已下载处继续。若浏览器打开出一屏乱码，
+      右键按钮选「链接另存为」即可。安装器会在本机解包内置程序（约 160 MB），请预留足够空间。
     </div>
   </div>
 
@@ -137,5 +153,70 @@
     源码公开：<a href="https://github.com/shmafan-lgtm/LumenAI" target="_blank" rel="noopener">github.com/shmafan-lgtm/LumenAI</a>
   </footer>
 </div>
+
+<script>
+// 渐进增强：主按钮默认已指向国内镜像(不跑 JS 也能下载)。
+// 这里在加载后对几条国内线路做「首字节竞速」，把主按钮切到当前网络下最快的一条。
+// 探测只取响应头、不读文件体，几乎不耗流量；全部失败则保留默认线路，不影响下载。
+(function () {
+  var RAW = 'https://raw.githubusercontent.com/shmafan-lgtm/LumenAI/gh-pages/Lumen-Setup.exe';
+  var LINES = [
+    { key: '1', name: '国内线路 ①', url: 'https://gh-proxy.com/' + RAW },
+    { key: '2', name: '国内线路 ②', url: 'https://v6.gh-proxy.org/' + RAW },
+    { key: '3', name: '国内线路 ③', url: 'https://ghproxy.net/' + RAW }
+  ];
+  var btn = document.getElementById('dlPrimary');
+  var status = document.getElementById('lineStatus');
+  if (!btn) return;
+
+  function setLine(line, suffix) {
+    btn.href = line.url;
+    if (status) {
+      status.innerHTML = '当前线路：<b>' + line.name + '</b>' + (suffix || '') + ' · 国内直连，无需代理';
+    }
+  }
+
+  // 默认线路先兜底，保证任何情况下按钮都可用
+  setLine(LINES[0]);
+
+  if (typeof fetch !== 'function' || typeof AbortController === 'undefined') return;
+
+  var best = null, bestT = Infinity, pending = LINES.length;
+  var done = false;
+  function finish() {
+    if (done) return;
+    if (best) {
+      setLine(best, '（自动测速最快）');
+      // 让备用按钮里与最快线路重复的那条仍可点，不删除
+    } else if (status) {
+      status.innerHTML = '已使用默认国内线路 · 若下载失败请换下方备用线路';
+    }
+    done = true;
+  }
+
+  LINES.forEach(function (line) {
+    var ctl = new AbortController();
+    var timer = setTimeout(function () { ctl.abort(); }, 4000);
+    var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+    // 不加任何自定义头，避免触发 CORS 预检(OPTIONS)被镜像拒绝；
+    // fetch 一返回就已拿到响应头，立刻 abort 即可，不读取 53MB 文件体。
+    fetch(line.url, { method: 'GET', signal: ctl.signal, cache: 'no-store' })
+      .then(function (r) {
+        ctl.abort();
+        clearTimeout(timer);
+        var t1 = (window.performance && performance.now) ? performance.now() : Date.now();
+        if (r && (r.ok || r.status === 206 || r.status === 200)) {
+          var dt = t1 - t0;
+          if (dt < bestT) { bestT = dt; best = line; }
+          try { if (r.body && r.body.cancel) r.body.cancel(); } catch (e) {}
+        }
+      })
+      .catch(function () { clearTimeout(timer); })
+      .finally(function () { pending--; if (pending <= 0) { clearTimeout(globalTimer); finish(); } });
+  });
+  // 总兜底：最多等 4.5s 就出结果，不让用户干等
+  var globalTimer = setTimeout(finish, 4500);
+})();
+</script>
 </body>
 </html>
