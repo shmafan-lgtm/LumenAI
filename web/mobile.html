@@ -737,17 +737,18 @@ function viewUrl(){
 function viewStart(){
   viewStop();
   var img = $('#viewImg'); if(!img) return;
+  // 顺序拉帧：当前帧完整加载（onload/onerror）后才请求下一帧。
+  // 公网链路单帧 1~2s，若用固定 50ms 定时器反复重置 src，浏览器会不断
+  // 取消上一张没下完的图 → onload 永不触发 → 画面永远卡在「正在连接…」。
+  var tick = function(){ img.src = viewUrl(); };
   img.onload = function(){
     $('#viewStage').classList.add('live');
     viewState.frames++;
     var el = (Date.now()-viewState.mark)/1000;
     if(el>=1){ viewState.fps = Math.round(viewState.frames/el); viewState.frames=0; viewState.mark=Date.now(); }
-  };
-  img.onerror = function(){ $('#viewStage').classList.remove('live'); };
-  var tick = function(){
-    img.src = viewUrl();
     viewState.timer = setTimeout(tick, 50);
   };
+  img.onerror = function(){ $('#viewStage').classList.remove('live'); viewState.timer = setTimeout(tick, 600); };
   tick();
 }
 
