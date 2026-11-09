@@ -42,13 +42,19 @@ class ScreenService:
     # -- 配置 ----------------------------------------------------------
     def set_mode(self, mode: str, client_w: int = 0, client_h: int = 0) -> None:
         with self._lock:
-            self._mode = (mode or "auto").strip() or "auto"
-            if client_w > 0:
+            mode = (mode or "auto").strip() or "auto"
+            changed = (mode != self._mode)
+            if client_w > 0 and client_w != self._client_w:
+                changed = True
                 self._client_w = int(client_w)
-            if client_h > 0:
+            if client_h > 0 and client_h != self._client_h:
+                changed = True
                 self._client_h = int(client_h)
-            # 换了模式，缓存的画面尺寸就不再有效
-            self._last_ts = 0.0
+            self._mode = mode
+            # 只在「分辨率档位 / 客户端尺寸」真的变了时才让缓存失效；
+            # 否则每帧都传同一个 mode 会反复强制重采，白白吃 CPU。
+            if changed:
+                self._last_ts = 0.0
 
     def status(self) -> dict:
         sw, sh = screencap.screen_size()

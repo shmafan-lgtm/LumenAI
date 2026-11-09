@@ -192,6 +192,16 @@ class _Gate:
             self.pending = None
         return True
 
+    def touch_session(self) -> None:
+        """刷新当前远控会话的活跃时间。
+
+        手机端拉画面（只看不动）时也要调用，否则空闲超时会在
+        「用户正盯着屏幕看、但没动鼠标」时把会话掐断，画面冻结。
+        """
+        with self.lock:
+            if self.session:
+                self.session["last_input"] = time.time()
+
     def snapshot(self) -> dict:
         with self.lock:
             return {

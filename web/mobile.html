@@ -233,23 +233,49 @@ padding:9px 16px;border-radius:11px;font-size:13px;z-index:99;opacity:0;transiti
   .lumen-think .lt-txt{animation:none}
 }
 
-/* ===== 远控画面（网易 UU 式：画面 + 可调分辨率） ===== */
-.viewwrap{position:relative;width:100%;border-radius:16px;overflow:hidden;
-  background:#07090C;border:1px solid var(--line);margin-bottom:10px;
-  display:grid;place-items:center;min-height:180px;aspect-ratio:16/9}
-.viewwrap img{width:100%;height:100%;object-fit:contain;display:block;
-  opacity:0;transition:opacity .18s ease;-webkit-user-drag:none;user-select:none}
-.viewwrap.live img{opacity:1}
+/* ===== 远控画面（网易 UU 式：全屏触控 + 可调分辨率） ===== */
+#paneRemote{position:fixed;inset:0;z-index:40;background:#000;display:none}
+#paneRemote.on{display:block}
+#remoteView{position:absolute;inset:0;background:#000;overflow:hidden;touch-action:none}
+#viewStage{position:absolute;inset:0;display:grid;place-items:center;touch-action:none}
+#viewStage img{width:100%;height:100%;object-fit:contain;display:block;
+  opacity:0;transition:opacity .18s ease;-webkit-user-drag:none;user-select:none;pointer-events:auto}
+#viewStage.live img{opacity:1}
 .viewhint{position:absolute;inset:0;display:grid;place-content:center;text-align:center;
-  color:var(--txt3);font-size:13px;pointer-events:none;line-height:1.7}
-.viewwrap.live .viewhint{display:none}
-.cursor{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;
-  border:2px solid rgba(95,211,182,.95);box-shadow:0 0 8px rgba(95,211,182,.7);
-  pointer-events:none;opacity:0;transition:opacity .2s ease;left:0;top:0}
+  color:#9aa3ad;font-size:14px;pointer-events:none;line-height:1.8;padding:0 28px}
+#viewStage.live .viewhint{display:none}
+.cursor{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;
+  border:2px solid rgba(95,211,182,.95);box-shadow:0 0 10px rgba(95,211,182,.7);
+  pointer-events:none;opacity:0;transition:opacity .2s ease;left:0;top:0;z-index:30}
 .cursor.on{opacity:1}
-.rowline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 4px}
-.sel{background:rgba(255,255,255,.05);border:1px solid var(--line2);color:var(--txt);
-  border-radius:10px;padding:8px 10px;font-size:13px;font-family:inherit;max-width:62%}
+.remote-top{position:absolute;top:0;left:0;right:0;z-index:35;display:flex;align-items:center;
+  gap:10px;padding:calc(env(safe-area-inset-top) + 10px) 14px 12px;
+  background:linear-gradient(180deg,rgba(0,0,0,.6),rgba(0,0,0,0));color:#fff}
+.remote-top .rt-back{font-size:14px;color:#fff;padding:6px 13px;border-radius:10px;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);white-space:nowrap}
+.remote-top .rt-title{flex:1;font-size:14px;font-weight:600;text-align:center;opacity:.92;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rt-sel{background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.22);color:#fff;
+  border-radius:10px;padding:7px 8px;font-size:12.5px;font-family:inherit;max-width:44%}
+.remote-bottom{position:absolute;bottom:0;left:0;right:0;z-index:35;display:flex;gap:8px;
+  align-items:center;padding:12px 12px calc(env(safe-area-inset-bottom) + 12px);
+  background:linear-gradient(0deg,rgba(0,0,0,.62),rgba(0,0,0,0))}
+.rt-ctrl{flex:1;padding:13px;border-radius:13px;font-size:14.5px;font-weight:700;color:#1a1206;
+  background:linear-gradient(180deg,#ecc07e,#d59a52);border:0}
+.rt-ctrl.on{background:rgba(255,92,92,.9);color:#fff}
+.rt-tool{padding:12px 13px;border-radius:13px;font-size:13px;color:#fff;
+  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22);min-width:48px}
+.remote-status{position:absolute;left:50%;transform:translateX(-50%);
+  bottom:calc(env(safe-area-inset-bottom) + 70px);z-index:35;
+  font-size:12px;color:#cfeede;background:rgba(0,0,0,.5);padding:5px 13px;border-radius:20px;
+  border:1px solid rgba(255,255,255,.16);pointer-events:none;white-space:nowrap;max-width:90vw;
+  overflow:hidden;text-overflow:ellipsis}
+.kb-ov{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.5);display:flex;align-items:flex-end}
+.kb-ov[hidden]{display:none}
+.kb-card{width:100%;background:#14181f;border-top:1px solid var(--line);padding:14px 14px calc(env(safe-area-inset-bottom) + 14px)}
+.kb-card textarea{width:100%;min-height:62px;padding:12px;border-radius:12px;border:1px solid var(--line2);
+  background:rgba(255,255,255,.05);color:var(--txt);font:15px/1.5 inherit;resize:none}
+.kb-card .kb-row{display:flex;gap:10px;margin-top:10px;align-items:stretch}
 
 /* 顶栏当前模型名 */
 .mlabel{display:block;font-size:11px;color:var(--gold);font-family:var(--mono);margin-top:1px}
@@ -352,52 +378,44 @@ padding:9px 16px;border-radius:11px;font-size:13px;z-index:99;opacity:0;transiti
       </div>
     </div>
 
-    <!-- 远控 -->
+    <!-- 远控（全屏触控，网易 UU 式） -->
     <div class="pane" id="paneRemote">
-      <div class="sect">远程控制</div>
-      <div class="viewwrap" id="viewWrap">
-        <img id="viewImg" alt="电脑画面">
-        <div class="viewhint" id="viewHint">未授权<br><span style="font-size:11px">点下方「申请远控」，电脑端确认后可用</span></div>
-        <div class="cursor" id="viewCursor"></div>
+      <div id="remoteView">
+        <div id="viewStage">
+          <img id="viewImg" alt="电脑画面">
+          <div class="viewhint" id="viewHint">正在连接…</div>
+          <div class="cursor" id="viewCursor"></div>
+        </div>
+        <div class="remote-top">
+          <button class="rt-back" id="btnRemoteBack">‹ 返回</button>
+          <div class="rt-title">Lumen 远程桌面</div>
+          <select id="viewMode" class="rt-sel">
+            <option value="auto">自适应</option>
+            <option value="480">480p 省流</option>
+            <option value="720">720p</option>
+            <option value="1080">1080p</option>
+            <option value="1440">1440p</option>
+            <option value="native">原始</option>
+          </select>
+        </div>
+        <div class="remote-status" id="remoteStatus">仅观看 · 点「申请控制」获得操控</div>
+        <div class="remote-bottom">
+          <button class="rt-ctrl" id="btnCtrl">申请控制</button>
+          <button class="rt-tool" id="btnKb2">键盘</button>
+          <button class="rt-tool" id="btnRclick">右键</button>
+          <button class="rt-tool" id="btnScUp">⇡</button>
+          <button class="rt-tool" id="btnScDn">⇣</button>
+        </div>
       </div>
-      <div class="rowline">
-        <span class="klabel" style="margin:0">画面分辨率</span>
-        <select id="viewMode" class="sel">
-          <option value="auto">自适应（贴合手机）</option>
-          <option value="480">480p 最省流量</option>
-          <option value="720">720p</option>
-          <option value="1080">1080p 推荐</option>
-          <option value="1440">1440p 高清</option>
-          <option value="native">原始分辨率</option>
-        </select>
+      <div class="kb-ov" id="kbOv" hidden>
+        <div class="kb-card">
+          <textarea id="kbTa" rows="2" placeholder="输入文字，点发送直接打进电脑（回车发送）"></textarea>
+          <div class="kb-row">
+            <button class="btn ghost" id="btnKbClose" style="flex:1">关闭</button>
+            <button class="send" id="btnKbSend" style="width:66px"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 8 6 8z"/></svg></button>
+          </div>
+        </div>
       </div>
-      <div class="note" id="viewInfo" style="margin:6px 0 10px">—</div>
-      <div class="pad" id="pad">
-        <div class="hint" id="padHint">未授权<br><span style="font-size:11px">点下方「申请远控」，电脑端确认后可用</span></div>
-        <div class="dotp" id="dotp"></div>
-      </div>
-      <div class="btns">
-        <button class="k" data-cmd="click" data-b="left"><svg viewBox="0 0 24 24"><path d="M5 3l14 9-6 1.6L10 20z"/></svg>左键</button>
-        <button class="k" data-cmd="dbl"><svg viewBox="0 0 24 24"><path d="M5 3l14 9-6 1.6L10 20z"/><path d="M9 12l9 6"/></svg>双击</button>
-        <button class="k" data-cmd="click" data-b="right"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>右键</button>
-      </div>
-      <div class="krow">
-        <button data-cmd="wheel" data-d="120">↑ 上滚</button>
-        <button data-cmd="wheel" data-d="-120">↓ 下滚</button>
-        <button data-cmd="key" data-v="enter">回车</button>
-      </div>
-      <div class="krow" style="display:none">
-        <textarea id="kb" placeholder="键盘输入…"></textarea>
-      </div>
-      <div class="klabel">键盘输入</div>
-      <div class="composer" style="padding:0;border:0;background:none">
-        <textarea id="kbin" rows="1" placeholder="输入文字后点发送，会直接打进电脑"></textarea>
-        <button class="send" id="btnKb"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 8 6 8z"/></svg></button>
-      </div>
-      <div class="hr"></div>
-      <button class="btn ghost" id="btnReqRemote">申请远控</button>
-      <button class="btn ghost" id="btnStopRemote" style="margin-top:8px;color:var(--red)">断开远控</button>
-      <div class="note" style="margin-top:10px">光标按「目标坐标 + 速度参数」平滑插值，不是点哪瞬移哪。每次远控都需要电脑端弹窗授权。</div>
     </div>
 
     <!-- 设备 -->
@@ -471,7 +489,7 @@ var RELAY_K = localStorage.getItem('lumen_relay_k') || '';
 if(QS.get('k')){ RELAY_K = QS.get('k'); try{ localStorage.setItem('lumen_relay_k', RELAY_K); }catch(e){} }
 var $ = function(s){return document.querySelector(s)};
 var esc = function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])})};
-var S = {sessions:[], cur:null, msgs:[], authorized:false, sid:null, dragging:false, lumen_running:true};
+var S = {sessions:[], cur:null, msgs:[], authorized:false, sid:null, dragging:false, lumen_running:true, remoteOpen:false};
 
 function toast(m){var t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('on')},1800)}
 
@@ -534,24 +552,27 @@ function enter(acc){
   loadTiers();
   loadPermission();
   setInterval(function(){ api('/api/remote/status').then(function(st){
-    var was = S.authorized;
     S.authorized = !!st.session; S.sid = st.session?st.session.id:null;
-    $('#pad').classList.toggle('live', S.authorized);
-    $('#padHint').textContent = S.authorized ? '已授权 · 在此拖动控制光标' : '未授权 · 点下方申请远控';
-    if(!S.authorized) $('#padHint').innerHTML='未授权<br><span style="font-size:11px">点下方「申请远控」，电脑端确认后可用</span>';
-    // 画面跟随授权状态启停
-    if(S.authorized && !was) viewStart();
-    if(!S.authorized && was){ viewStop(); $('#viewWrap').classList.remove('live'); $('#viewCursor').classList.remove('on'); }
-    if(S.authorized){
-      viewInfo(st.view);
-      // 用电脑端返回的光标位置，在画面上标出来
-      if(st.cursor && st.view && st.view.frame && st.view.frame.w){
-        var sc = st.view.screen||{};
-        var fw = st.view.frame.w, fh = st.view.frame.h;
-        if(sc.w && sc.h){
-          showCursor((st.cursor[0]-0)/(sc.w||1), (st.cursor[1]-0)/(sc.h||1));
-        }
+    updateCtrlBtn();
+    // 远控状态条：控制中 / 仅观看
+    var rs = $('#remoteStatus');
+    if(rs){
+      if(S.authorized){
+        var v = st.view||{}, t = v.target||{}, s = v.screen||{};
+        rs.textContent = '● 控制中 · ' + (t.w? (t.w+'×'+t.h):'') + (v.fps? (' · '+v.fps+'fps'):'');
+      } else {
+        rs.textContent = '○ 仅观看 · 点「申请控制」获得操控';
       }
+    }
+    // 进入远控页就持续拉画面（token 视图，无需授权）；离开由切换器停掉
+    if(S.remoteOpen){
+      if(viewState.timer==null) viewStart();
+      refreshRemoteViewInfo(st);
+    }
+    // 控制中：用电脑端真实光标位置标出指示点
+    if(S.authorized && st.cursor && st.view && st.view.screen){
+      var sc = st.view.screen||{};
+      if(sc.w && sc.h) showCursor(st.cursor[0]/(sc.w||1), st.cursor[1]/(sc.h||1));
     }
   }).catch(function(){}); }, 2500);
 }
@@ -563,6 +584,8 @@ document.querySelectorAll('.tabbar button').forEach(function(b){
     document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('on')});
     $('#pane'+b.dataset.tab).classList.add('on');
     if(b.dataset.tab==='Device') loadDevices();
+    if(b.dataset.tab==='Remote'){ S.remoteOpen=true; viewStart(); viewRefreshStatus(); }
+    else { S.remoteOpen=false; viewStop(); }
   };
 });
 
@@ -690,42 +713,40 @@ function fallbackChat(S, ai, t){
 
 
 /* ============================================================
-   远控画面：轮询拉帧 + 点击映射 + 分辨率切换
+   远控画面（全屏触控，网易 UU 式）：轮询拉帧 + 直接触控 + 分辨率切换
    ============================================================ */
-var viewState = { timer:null, fps:0, frames:0, mark:Date.now(), lastInfo:'' };
+var viewState = { timer:null, fps:0, frames:0, mark:Date.now() };
+var lastMap = { x:0.5, y:0.5 };   // 最近一次光标相对坐标（右键 / 状态指示用）
 
 function viewClientSize(){
-  var w = window.innerWidth || 390;
-  var h = window.innerHeight || 844;
-  // 用 CSS 像素（去掉设备像素比），和「自适应」策略一致
+  var w = window.innerWidth || 390, h = window.innerHeight || 844;
   return { w: Math.round(w), h: Math.round(h) };
 }
 
+// 画面帧地址：已登录即可拉（token 视图，只读观看）；有会话则带上 sid（控制视图，刷新活跃防空闲掐断）
 function viewUrl(){
   var c = viewClientSize();
   var m = ($('#viewMode')||{}).value || 'auto';
-  // <img> 不能带 Authorization 头，用当前远控会话 ID 作为凭证（断开即失效）
   return '/api/remote/frame?mode='+encodeURIComponent(m)
     + '&cw='+c.w+'&ch='+c.h
     + '&sid='+encodeURIComponent(S.sid||'')
-    + '&t='+Date.now();
+    + '&t='+encodeURIComponent(TOK||'')
+    + '&_='+Date.now();
 }
 
 function viewStart(){
   viewStop();
-  var img = $('#viewImg');
-  if(!img) return;
+  var img = $('#viewImg'); if(!img) return;
   img.onload = function(){
-    $('#viewWrap').classList.add('live');
+    $('#viewStage').classList.add('live');
     viewState.frames++;
     var el = (Date.now()-viewState.mark)/1000;
     if(el>=1){ viewState.fps = Math.round(viewState.frames/el); viewState.frames=0; viewState.mark=Date.now(); }
   };
-  img.onerror = function(){ $('#viewWrap').classList.remove('live'); };
+  img.onerror = function(){ $('#viewStage').classList.remove('live'); };
   var tick = function(){
-    if(!S.authorized){ viewStop(); return; }
     img.src = viewUrl();
-    viewState.timer = setTimeout(tick, 40);
+    viewState.timer = setTimeout(tick, 50);
   };
   tick();
 }
@@ -735,124 +756,165 @@ function viewStop(){
   var img = $('#viewImg'); if(img) img.onload=null;
 }
 
-function viewInfo(st){
-  var el = $('#viewInfo'); if(!el || !st) return;
-  var t = st.target||{}, s = st.screen||{}, f = st.frame||{};
-  var txt = '电脑 ' + s.w + '×' + s.h + ' → 远控画面 ' + t.w + '×' + t.h;
-  if(st.fps) txt += ' · ' + st.fps + ' fps';
-  if(viewState.fps) txt += '（手机端 ' + viewState.fps + ' fps）';
-  el.textContent = txt;
-}
-
 function viewRefreshStatus(){
   api('/api/remote/status').then(function(st){
-    viewInfo(st.view);
-    if(st.view && st.view.mode && $('#viewMode')) $('#viewMode').value = st.view.mode;
+    refreshRemoteViewInfo(st);
   }).catch(function(){});
 }
 
-/* 点画面 → 映射到电脑真实坐标 */
-function viewTap(e){
-  if(!S.authorized){ toast('还没有授权'); return; }
-  var img = $('#viewImg'); if(!img) return;
-  var r = img.getBoundingClientRect();
-  // object-fit:contain，画面可能有黑边，要按实际内容区域换算
-  var nat = { w: img.naturalWidth||1, h: img.naturalHeight||1 };
-  var scale = Math.min(r.width/nat.w, r.height/nat.h);
-  var dw = nat.w*scale, dh = nat.h*scale;
-  var ox = r.left + (r.width-dw)/2, oy = r.top + (r.height-dh)/2;
-  var x = (e.clientX-ox)/dw, y = (e.clientY-oy)/dh;
-  if(x<0||x>1||y<0||y>1) return;
-  api('/api/remote/tap',{ x:x, y:y, button:'left', double:false }).catch(function(){});
-  showCursor(x,y);
+function refreshRemoteViewInfo(st){
+  if(st && st.view && st.view.mode && $('#viewMode')){
+    var sel = $('#viewMode'); if(sel.value !== st.view.mode) sel.value = st.view.mode;
+  }
 }
 
 function showCursor(x,y){
   var c = $('#viewCursor'); if(!c) return;
-  c.style.left = (x*100)+'%';
-  c.style.top = (y*100)+'%';
+  c.style.left = (x*100)+'%'; c.style.top = (y*100)+'%';
   c.classList.add('on');
 }
 
+/* ---------------- 控制授权（申请 / 断开） ---------------- */
+function updateCtrlBtn(){
+  var b = $('#btnCtrl'); if(!b) return;
+  if(S.authorized){ b.textContent='断开控制'; b.classList.add('on'); }
+  else { b.textContent='申请控制'; b.classList.remove('on'); }
+}
+function requestControl(){
+  api('/api/remote/request',{device: ($('#dn')?$('#dn').value:'手机')}).then(function(){
+    toast('已发送请求，请在电脑端点「允许」');
+    var n=0, iv=setInterval(function(){
+      n++; if(n>50){ clearInterval(iv); return; }
+      api('/api/remote/status').then(function(st){
+        if(st.session){ clearInterval(iv); S.authorized=true; S.sid=st.session.id;
+          updateCtrlBtn(); refreshRemoteViewInfo(st); toast('已获得控制'); }
+      }).catch(function(){});
+    }, 1200);
+  }).catch(function(e){ toast(e.message); });
+}
+function stopControl(){
+  api('/api/remote/stop',{by:'mobile'}).then(function(){
+    S.authorized=false; S.sid=null; updateCtrlBtn();
+    $('#viewCursor').classList.remove('on'); toast('已断开控制');
+  }).catch(function(){});
+}
+
+/* ---------------- 全屏触控：拖动=移动，点=点击，双指=滚动 ---------------- */
 (function(){
-  var img = $('#viewImg');
-  if(img){
-    img.addEventListener('click', viewTap);
-    img.addEventListener('touchend', function(e){
-      if(e.changedTouches && e.changedTouches.length){
-        var t = e.changedTouches[0];
-        viewTap({ clientX:t.clientX, clientY:t.clientY });
-      }
-    }, { passive:true });
+  var stage = $('#viewStage');
+  if(!stage) return;
+
+  function mapToScreen(cx, cy){
+    var img = $('#viewImg'); if(!img) return { x:0.5, y:0.5 };
+    var r = img.getBoundingClientRect();
+    var nat = { w: img.naturalWidth||1, h: img.naturalHeight||1 };
+    // object-fit:contain，画面可能带黑边，要按实际内容区域换算
+    var scale = Math.min(r.width/nat.w, r.height/nat.h);
+    var dw = nat.w*scale, dh = nat.h*scale;
+    var ox = r.left + (r.width-dw)/2, oy = r.top + (r.height-dh)/2;
+    var x = (cx-ox)/dw, y = (cy-oy)/dh;
+    return { x: Math.max(0,Math.min(1,x)), y: Math.max(0,Math.min(1,y)) };
   }
+  function sendMove(x,y){
+    lastMap = { x:x, y:y };
+    showCursor(x,y);
+    if(!S.authorized) return;
+    api('/api/remote/input',{type:'move',x:x,y:y,speed:1}).catch(function(){});
+  }
+  function sendTap(x,y,button){
+    lastMap = { x:x, y:y };
+    if(!S.authorized){ toast('请先点「申请控制」'); return; }
+    api('/api/remote/tap',{x:x,y:y,button:button||'left',double:false}).catch(function(){});
+    showCursor(x,y);
+  }
+  function sendWheel(d){
+    if(!S.authorized){ toast('请先点「申请控制」'); return; }
+    api('/api/remote/input',{type:'wheel',delta:d}).catch(function(){});
+  }
+  function sendText(){
+    var ta = $('#kbTa'); var v = ta?ta.value:''; if(!v) return;
+    if(!S.authorized){ toast('请先点「申请控制」'); return; }
+    api('/api/remote/input',{type:'text',value:v}).then(function(){
+      ta.value=''; var ov=$('#kbOv'); if(ov) ov.hidden=true; toast('已发送');
+    }).catch(function(e){ toast(e.message); });
+  }
+
+  var activePts = {};
+  var st = { mode:null, sx:0, sy:0, st0:0, moved:false, lastY:0, lastScroll:0 };
+
+  stage.addEventListener('pointerdown', function(e){
+    activePts[e.pointerId] = 1;
+    if(Object.keys(activePts).length>=2){ st.mode='scroll'; st.lastY=e.clientY; }
+    else { st.mode='pointer'; st.sx=e.clientX; st.sy=e.clientY; st.st0=Date.now(); st.moved=false;
+      var m=mapToScreen(e.clientX,e.clientY); sendMove(m.x,m.y); }
+    e.preventDefault();
+  }, {passive:false});
+
+  stage.addEventListener('pointermove', function(e){
+    if(st.mode==='scroll' && Object.keys(activePts).length>=2){
+      var dy = e.clientY - st.lastY; st.lastY = e.clientY;
+      var now = Date.now();
+      if(now-st.lastScroll>60 && Math.abs(dy)>4){ sendWheel(dy<0?120:-120); st.lastScroll=now; }
+    } else if(st.mode==='pointer' && Object.keys(activePts).length===1){
+      if(Math.abs(e.clientX-st.sx)>8 || Math.abs(e.clientY-st.sy)>8) st.moved=true;
+      var m=mapToScreen(e.clientX,e.clientY); sendMove(m.x,m.y);
+    }
+    e.preventDefault();
+  }, {passive:false});
+
+  function endPt(e){
+    delete activePts[e.pointerId];
+    var n = Object.keys(activePts).length;
+    if(st.mode==='pointer'){
+      if(n===0){
+        var dur = Date.now()-st.st0;
+        if(!st.moved && dur<260){ var m=mapToScreen(st.sx,st.sy); sendTap(m.x,m.y,'left'); }
+        st.mode=null;
+      } else if(n===1){
+        // 双指松了一根，剩下这根继续当作移动，避免误触点击
+        var id = Object.keys(activePts)[0];
+        st.mode='pointer'; st.sx=lastPtX; st.sy=lastPtY; st.st0=Date.now(); st.moved=true;
+      }
+    } else if(st.mode==='scroll' && n<2){
+      st.mode = (n===1) ? 'pointer' : null;
+    }
+    e.preventDefault();
+  }
+  // 缓存最近一次 pointer 坐标，供双指松手后衔接
+  var lastPtX=0, lastPtY=0;
+  stage.addEventListener('pointermove', function(e){ lastPtX=e.clientX; lastPtY=e.clientY; }, {passive:true});
+  stage.addEventListener('pointerup', endPt, {passive:false});
+  stage.addEventListener('pointercancel', endPt, {passive:false});
+
+  // 分辨率切换
   var sel = $('#viewMode');
   if(sel){
     sel.addEventListener('change', function(){
       var c = viewClientSize();
-      api('/api/remote/view',{ mode:sel.value, cw:c.w, ch:c.h }).then(function(st){
-        viewInfo(st);
-        toast('画面分辨率已切换');
-      }).catch(function(e){ toast('切换失败：'+e.message,'err'); });
+      api('/api/remote/view',{ mode:sel.value, cw:c.w, ch:c.h }).then(function(){
+        toast('画面分辨率已切换：'+(sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:sel.value));
+      }).catch(function(e){ toast('切换失败：'+e.message); });
     });
   }
-})();
-
-/* ---------------- 远控 ---------------- */
-$('#btnReqRemote').onclick=function(){
-  api('/api/remote/request',{device: ($('#dn').value||'手机')}).then(function(r){
-    toast('已发送请求，请在电脑上点「允许」');
-    var n=0, iv=setInterval(function(){
-      n++; if(n>40){clearInterval(iv);return}
-      api('/api/remote/status').then(function(st){
-        if(st.session){ clearInterval(iv); S.authorized=true; S.sid=st.session.id;
-          $('#pad').classList.add('live'); $('#padHint').textContent='已授权 · 在此拖动控制光标';
-          viewStart(); viewRefreshStatus();
-          toast('已授权，开始控制'); }
-      }).catch(function(){});
-    },1500);
-  }).catch(function(e){ toast(e.message); });
-};
-$('#btnStopRemote').onclick=function(){
-  api('/api/remote/stop',{by:'mobile'}).then(function(){ S.authorized=false;
-    $('#pad').classList.remove('live');
-    $('#viewWrap').classList.remove('live');
-    $('#viewCursor').classList.remove('on');
-    viewStop();
-    $('#padHint').innerHTML='未授权<br><span style="font-size:11px">点下方「申请远控」，电脑端确认后可用</span>';
-    toast('已断开'); });
-};
-
-var pad=$('#pad'), dot=$('#dotp'), lastSent=0;
-function sendMove(ev){
-  if(!S.authorized) return;
-  var r=pad.getBoundingClientRect();
-  var x=Math.min(1,Math.max(0,(ev.clientX-r.left)/r.width));
-  var y=Math.min(1,Math.max(0,(ev.clientY-r.top)/r.height));
-  dot.style.left=(x*100)+'%'; dot.style.top=(y*100)+'%';
-  var now=Date.now(); if(now-lastSent<24) return; lastSent=now;
-  api('/api/remote/input',{type:'move',x:x,y:y,speed:0.85}).catch(function(){});
-}
-pad.addEventListener('pointerdown',function(e){ if(!S.authorized){toast('还没有授权');return} pad.setPointerCapture(e.pointerId); pad.classList.add('touch'); S.dragging=true; sendMove(e); });
-pad.addEventListener('pointermove',function(e){ if(!S.dragging) return; sendMove(e); });
-pad.addEventListener('pointerup',function(e){ S.dragging=false; if(!S.authorized) return;
-  var r=pad.getBoundingClientRect();
-  api('/api/remote/input',{type:'click',button:'left',x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height}).catch(function(){});
-});
-document.querySelectorAll('.k[data-cmd]').forEach(function(b){
-  b.onclick=function(){
-    if(!S.authorized){toast('还没有授权');return}
-    var c=b.dataset.cmd;
-    if(c==='click') api('/api/remote/input',{type:'click',button:b.dataset.b||'left'}).catch(function(){});
-    if(c==='dbl') api('/api/remote/input',{type:'click',button:'left',double:true}).catch(function(){});
-    if(c==='wheel') api('/api/remote/input',{type:'wheel',delta:+b.dataset.d}).catch(function(){});
-    if(c==='key') api('/api/remote/input',{type:'key',name:b.dataset.v}).catch(function(){});
+  // 键盘浮层
+  var ov = $('#kbOv');
+  if($('#btnKb2')) $('#btnKb2').onclick=function(){ if(ov) ov.hidden=false; var ta=$('#kbTa'); if(ta) ta.focus(); };
+  if($('#btnKbClose')) $('#btnKbClose').onclick=function(){ if(ov) ov.hidden=true; };
+  if($('#btnKbSend')) $('#btnKbSend').onclick=function(){ sendText(); };
+  var ta = $('#kbTa');
+  if(ta) ta.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendText(); } });
+  // 控制按钮
+  if($('#btnCtrl')) $('#btnCtrl').onclick=function(){ if(S.authorized) stopControl(); else requestControl(); };
+  if($('#btnRclick')) $('#btnRclick').onclick=function(){ sendTap(lastMap.x,lastMap.y,'right'); };
+  if($('#btnScUp')) $('#btnScUp').onclick=function(){ sendWheel(120); };
+  if($('#btnScDn')) $('#btnScDn').onclick=function(){ sendWheel(-120); };
+  if($('#btnRemoteBack')) $('#btnRemoteBack').onclick=function(){
+    S.remoteOpen=false; viewStop();
+    document.querySelectorAll('.tabbar button').forEach(function(x){ x.classList.toggle('on', x.dataset.tab==='Sessions'); });
+    document.querySelectorAll('.pane').forEach(function(p){ p.classList.remove('on'); });
+    $('#paneSessions').classList.add('on');
   };
-});
-$('#btnKb').onclick=function(){
-  if(!S.authorized){toast('还没有授权');return}
-  var v=$('#kbin').value; if(!v) return;
-  api('/api/remote/input',{type:'text',value:v}).then(function(){$('#kbin').value=''}).catch(function(e){toast(e.message)});
-};
+})();
 
 /* ---------------- 设备 ---------------- */
 function refreshWake(){

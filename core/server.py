@@ -111,6 +111,11 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/assets/"):
             return self._serve_asset(path[len("/assets/"):])
 
+        # 远控画面：独立鉴权分支（必须在全局登录闸门之前处理，
+        # 因为浏览器 <img> 没法带 Authorization 头，只能走 sid / t 查询参数）。
+        if path == "/api/remote/frame":
+            return self._serve_frame()
+
         if not ok:
             return self._err("需要登录：请在手机端用账号或配对码登录", 401)
 
@@ -202,44 +207,7 @@ class Handler(BaseHTTPRequestHandler):
                 snap["view"] = screencap_service.service.status()
                 return self._json(snap)
 
-            if path == "/api/remote/frame":
-                # 远控画面：手机端 <img> 直接拉，浏览器原生解码。
-                # 必须已授权才能看画面 —— 否则同网段任何人截屏都能看到桌面。
-                #
-                # <img> 标签没法带 Authorization 头，所以这里额外接受
-                # **当前远控会话 ID** 作为凭证：它只在授权期间有效，
-                # 断开远控立刻失效，比长期 token 安全得多。
-                ses = remote.gate.snapshot().get("session")
-                if not ses:
-                    return self._err("未授权，请先在电脑端确认", 403)
-                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-                sid = (q.get("sid") or [""])[0]
-                hdr = self.headers.get("Authorization") or ""
-                bearer = hdr[7:].strip() if hdr.lower().startswith("bearer ") else ""
-                if sid:
-                    if sid != (ses.get("id") or ""):
-                        return self._err("会话已失效", 403)
-                elif not bearer:
-                    return self._err("需要登录", 401)
-                mode = (q.get("mode") or [""])[0]
-                cw = int((q.get("cw") or ["0"])[0] or 0)
-                ch = int((q.get("ch") or ["0"])[0] or 0)
-                if mode:
-                    screencap_service.service.set_mode(mode, cw, ch)
-                data, ctype = screencap_service.service.frame(min_interval=0.03)
-                if not data:
-                    return self._err("画面采集失败", 503)
-                self.send_response(200)
-                self.send_header("Content-Type", ctype)
-                self.send_header("Content-Length", str(len(data)))
-                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
-                self.send_header("Pragma", "no-cache")
-                self.end_headers()
-                try:
-                    self.wfile.write(data)
-                except (BrokenPipeError, ConnectionResetError):
-                    pass
-                return
+            # /api/remote/frame 已在全局登录闸门之前单独处理（见 _serve_frame）
 
             if path == "/api/guard/status":
                 return self._json(_guard_call("STATUS"))
@@ -584,6 +552,64 @@ class Handler(BaseHTTPRequestHandler):
                         break
                     self.wfile.write(chunk)
         except Exception:
+            pass
+
+    # ------------------------------------------------------------ 远控画面
+    def _serve_frame(self):
+        """远控画面帧：手机端 <img> 直接拉，浏览器原生解码。
+
+        鉴权（满足任一即可）：
+          1. 本地回环（桌面端本机）             —— 永远放行
+          2. 当前远控会话 sid（控制期间有效）   —— 断开即失效，最安全
+          3. Authorization: Bearer <令牌>        —— 已登录设备
+          4. 查询参数 t=<登录令牌>              —— 给 <img> 用（没法带头）
+
+        控制模式下（有活跃会话）每次拉帧都刷新会话活跃时间，
+        这样「只看画面、没动鼠标」也不会被空闲超时掐断而冻结。
+        没有活跃会话时，已登录设备仍可只读观看（不依赖远控授权）。
+        """
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        sid = (q.get("sid") or [""])[0]
+        t = (q.get("t") or [""])[0]
+        hdr = self.headers.get("Authorization") or ""
+        bearer = hdr[7:].strip() if hdr.lower().startswith("bearer ") else ""
+
+        ses = remote.gate.snapshot().get("session")
+        if ses:
+            # 控制模式：sid 必须匹配当前活跃会话
+            if sid and sid != (ses.get("id") or ""):
+                return self._err("会话已失效", 403)
+            remote.gate.touch_session()      # 观看即活跃，防空闲掐断
+            authed = True
+        else:
+            # 观看模式：已登录即可只读观看，不要求远控授权
+            authed = False
+            if self._is_local():
+                authed = True
+            elif bearer and auth.check_token(bearer):
+                authed = True
+            elif t and auth.check_token(t):
+                authed = True
+            if not authed:
+                return self._err("需要登录", 401)
+
+        mode = (q.get("mode") or [""])[0]
+        cw = int((q.get("cw") or ["0"])[0] or 0)
+        ch = int((q.get("ch") or ["0"])[0] or 0)
+        if mode:
+            screencap_service.service.set_mode(mode, cw, ch)
+        data, ctype = screencap_service.service.frame(min_interval=0.03)
+        if not data:
+            return self._err("画面采集失败", 503)
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.end_headers()
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
             pass
 
     # ------------------------------------------------------------ 登录
